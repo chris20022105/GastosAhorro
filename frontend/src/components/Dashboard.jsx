@@ -140,21 +140,9 @@ export default function Dashboard({ stats, user, onUpdateBudget, token }) {
           </div>
           <button 
             onClick={() => setIsModalOpen(true)}
-            style={{ 
-              backgroundColor: 'rgba(255,255,255,0.15)', 
-              padding: '10px', 
-              borderRadius: '16px', 
-              border: 'none', 
-              color: '#ffffff',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              transition: 'all 0.2s ease'
-            }}
-            onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.92)'}
-            onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
+            className="btn-settings"
             title="Configurar Presupuesto e Ingresos"
+            type="button"
           >
             <Sliders size={20} />
           </button>
