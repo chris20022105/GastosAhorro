@@ -24,11 +24,14 @@ export default function AddExpense({ isOpen, onClose, onExpenseAdded, token, use
   useEffect(() => {
     if (isOpen) {
       document.body.classList.add('no-scroll');
+      document.documentElement.classList.add('no-scroll');
     } else {
       document.body.classList.remove('no-scroll');
+      document.documentElement.classList.remove('no-scroll');
     }
     return () => {
       document.body.classList.remove('no-scroll');
+      document.documentElement.classList.remove('no-scroll');
     };
   }, [isOpen]);
 

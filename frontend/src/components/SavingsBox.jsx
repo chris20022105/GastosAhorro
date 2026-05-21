@@ -10,7 +10,6 @@ export default function SavingsBox({ token, user, showToast }) {
   // Estados para Modal Aporte
   const [isDepositOpen, setIsDepositOpen] = useState(false);
   const [depAmount, setDepAmount] = useState('');
-  const [depDescription, setDepDescription] = useState('');
   const [depDate, setDepDate] = useState('');
   const [isFromSalary, setIsFromSalary] = useState(true);
   const [depLoading, setDepLoading] = useState(false);
@@ -63,7 +62,6 @@ export default function SavingsBox({ token, user, showToast }) {
   useEffect(() => {
     if (isDepositOpen) {
       setDepAmount('');
-      setDepDescription('');
       setDepDate(new Date().toISOString().split('T')[0]);
       setDepError('');
       setIsFromSalary(true);
@@ -83,11 +81,14 @@ export default function SavingsBox({ token, user, showToast }) {
   useEffect(() => {
     if (isDepositOpen || isGoalOpen) {
       document.body.classList.add('no-scroll');
+      document.documentElement.classList.add('no-scroll');
     } else {
       document.body.classList.remove('no-scroll');
+      document.documentElement.classList.remove('no-scroll');
     }
     return () => {
       document.body.classList.remove('no-scroll');
+      document.documentElement.classList.remove('no-scroll');
     };
   }, [isDepositOpen, isGoalOpen]);
 
@@ -122,12 +123,6 @@ export default function SavingsBox({ token, user, showToast }) {
       return;
     }
 
-    if (!depDescription.trim()) {
-      setDepError('Por favor, ingresa una descripción del aporte.');
-      setDepLoading(false);
-      return;
-    }
-
     try {
       const response = await fetch('/api/savings/deposits', {
         method: 'POST',
@@ -137,7 +132,7 @@ export default function SavingsBox({ token, user, showToast }) {
         },
         body: JSON.stringify({
           amount: parsedAmount,
-          description: depDescription.trim(),
+          description: isFromSalary ? 'Sueldo del Mes' : 'Aporte Externo',
           date: depDate,
           is_from_salary: isFromSalary
         })
@@ -340,31 +335,42 @@ export default function SavingsBox({ token, user, showToast }) {
           <div className="list-container">
             {deposits.map((dep) => (
               <div key={dep.id} className="expense-item">
-                <div className="expense-left">
-                  <div className="category-emoji-box" style={{ backgroundColor: 'var(--color-primary-light)', color: 'var(--color-primary)' }}>
+                <div className="expense-left" style={{ minWidth: 0 }}>
+                  <div className="category-emoji-box" style={{ backgroundColor: 'var(--color-primary-light)', color: 'var(--color-primary)', flexShrink: 0 }}>
                     🐷
                   </div>
-                  <div className="expense-info">
-                    <span className="expense-desc">{dep.description}</span>
-                    <div className="expense-meta">
-                      <span className="spender-tag" style={{ backgroundColor: 'var(--color-primary-light)', color: 'var(--color-primary)' }}>
-                        {dep.spender_name.split(' ')[0]}
+                  <div className="expense-info" style={{ minWidth: 0 }}>
+                    <span className="expense-desc" style={{ fontSize: '14px', fontWeight: '600', color: 'var(--ios-text)' }}>
+                      {dep.spender_name.split(' ')[0]}
+                    </span>
+                    <div className="expense-meta" style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '4px' }}>
+                      <span 
+                        className="spender-tag" 
+                        style={{ 
+                          backgroundColor: dep.is_from_salary ? '#e2ede1' : '#f2f2f7', 
+                          color: dep.is_from_salary ? 'var(--color-primary)' : 'var(--ios-text-secondary)',
+                          fontSize: '9px',
+                          padding: '2px 6px',
+                          borderRadius: '6px',
+                          fontWeight: '700',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '3px'
+                        }}
+                      >
+                        {dep.is_from_salary ? '💼 Sueldo' : '🌍 Externo'}
                       </span>
-                      {dep.is_from_salary && (
-                        <>
-                          <span>•</span>
-                          <span className="spender-tag" style={{ backgroundColor: '#e5e5ea', color: '#555', fontSize: '9px', fontWeight: 'bold' }}>
-                            💼 Sueldo
-                          </span>
-                        </>
-                      )}
-                      <span>•</span>
-                      <span>{new Date(dep.date + 'T00:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</span>
+                      <span style={{ color: 'var(--ios-text-secondary)', opacity: 0.5 }}>•</span>
+                      <span style={{ color: 'var(--ios-text-secondary)' }}>
+                        {new Date(dep.date + 'T00:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
+                      </span>
                     </div>
                   </div>
                 </div>
-                <div className="expense-right">
-                  <span className="expense-amount" style={{ color: 'var(--color-primary)' }}>+ S/. {parseFloat(dep.amount).toFixed(2)}</span>
+                <div className="expense-right" style={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
+                  <span className="expense-amount" style={{ color: 'var(--color-primary)', fontWeight: '700' }}>
+                    + S/. {parseFloat(dep.amount).toFixed(2)}
+                  </span>
                   {user.id === dep.user_id && (
                     <button 
                       className="btn-delete"
@@ -481,34 +487,7 @@ export default function SavingsBox({ token, user, showToast }) {
             </span>
           </div>
 
-          {/* Descripción / Origen */}
-          <div className="form-group" style={{ marginBottom: '16px' }}>
-            <label className="form-label" htmlFor="dep-desc">¿De dónde viene este ahorro?</label>
-            <div style={{ position: 'relative' }}>
-              <input
-                id="dep-desc"
-                type="text"
-                className="form-input"
-                style={{ width: '100%', paddingLeft: '40px' }}
-                placeholder="Ej. Ahorro sueldo, Venta de artículo, Extra..."
-                value={depDescription}
-                onChange={(e) => setDepDescription(e.target.value)}
-                required
-                maxLength={40}
-                disabled={depLoading}
-              />
-              <Edit3 
-                size={16} 
-                style={{ 
-                  position: 'absolute', 
-                  left: '14px', 
-                  top: '50%', 
-                  transform: 'translateY(-50%)',
-                  color: 'var(--ios-text-secondary)'
-                }} 
-              />
-            </div>
-          </div>
+
 
           {/* Fecha */}
           <div className="form-group" style={{ marginBottom: '24px' }}>
