@@ -32,6 +32,18 @@ export default function Dashboard({ stats, user, onUpdateBudget, token }) {
     }
   }, [isModalOpen, incomeChris, incomeSolansh, budgetLimit]);
 
+  // Bloquear scroll del fondo cuando el modal de configuración está abierto
+  useEffect(() => {
+    if (isModalOpen) {
+      document.body.classList.add('no-scroll');
+    } else {
+      document.body.classList.remove('no-scroll');
+    }
+    return () => {
+      document.body.classList.remove('no-scroll');
+    };
+  }, [isModalOpen]);
+
   const numChris = parseFloat(valChris) || 0;
   const numSolansh = parseFloat(valSolansh) || 0;
   const combinedIncome = numChris + numSolansh;
@@ -266,10 +278,14 @@ export default function Dashboard({ stats, user, onUpdateBudget, token }) {
       </div>
 
       {/* MODAL CONFIGURACIÓN DE INGRESOS Y PRESUPUESTO (Estilo Bottom Sheet iOS) */}
-      <div className={`overlay ${isModalOpen ? 'open' : ''}`} onClick={() => setIsModalOpen(false)}></div>
+      <div 
+        className={`overlay ${isModalOpen ? 'open' : ''}`} 
+        onClick={() => setIsModalOpen(false)}
+        onTouchMove={(e) => e.preventDefault()}
+      ></div>
       
       <div className={`bottom-sheet ${isModalOpen ? 'open' : ''}`}>
-        <div className="sheet-header">
+        <div className="sheet-header" onTouchMove={(e) => e.preventDefault()}>
           <span className="sheet-title">Configuración del Mes ({yearMonth})</span>
           <button className="btn-close" onClick={() => setIsModalOpen(false)} type="button">
             <X size={18} />

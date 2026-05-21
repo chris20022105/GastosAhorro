@@ -43,6 +43,10 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+body.no-scroll {
+  overflow: hidden;
+}
+
 button, input, select {
   font-family: inherit;
   font-size: inherit;

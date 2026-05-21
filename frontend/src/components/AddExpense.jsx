@@ -20,6 +20,18 @@ export default function AddExpense({ isOpen, onClose, onExpenseAdded, token, use
     }
   }, [isOpen]);
 
+  // Bloquear scroll del fondo cuando está abierto
+  useEffect(() => {
+    if (isOpen) {
+      document.body.classList.add('no-scroll');
+    } else {
+      document.body.classList.remove('no-scroll');
+    }
+    return () => {
+      document.body.classList.remove('no-scroll');
+    };
+  }, [isOpen]);
+
   const categories = [
     { name: 'Café y Bebidas', emoji: '☕' },
     { name: 'Antojos y Snacks', emoji: '🍿' },
@@ -90,11 +102,15 @@ export default function AddExpense({ isOpen, onClose, onExpenseAdded, token, use
   return (
     <>
       {/* Fondo oscuro traslúcido */}
-      <div className={`overlay ${isOpen ? 'open' : ''}`} onClick={onClose}></div>
+      <div 
+        className={`overlay ${isOpen ? 'open' : ''}`} 
+        onClick={onClose}
+        onTouchMove={(e) => e.preventDefault()}
+      ></div>
 
       {/* Tarjeta bottom sheet de iOS */}
       <div className={`bottom-sheet ${isOpen ? 'open' : ''}`}>
-        <div className="sheet-header">
+        <div className="sheet-header" onTouchMove={(e) => e.preventDefault()}>
           <span className="sheet-title">Registrar Gasto Hormiga</span>
           <button className="btn-close" onClick={onClose} type="button">
             <X size={18} />
