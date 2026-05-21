@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Wallet, Sparkles, Heart, Sliders, X, Lock, AlertTriangle } from 'lucide-react';
+import { Wallet, Sparkles, Heart, Sliders, X, Lock, AlertTriangle, CalendarDays } from 'lucide-react';
 import useScrollLock from '../hooks/useScrollLock';
 
 export default function Dashboard({ stats, user, onUpdateBudget, token }) {
@@ -18,6 +18,85 @@ export default function Dashboard({ stats, user, onUpdateBudget, token }) {
   const remainingSalary = Math.max(combinedIncome - totalSpent, 0);
   const isExceeded = totalSpent >= budgetLimit;
   const isNearLimit = totalSpent >= budgetLimit * 0.9 && totalSpent < budgetLimit;
+
+  // Cálculos de Micro-Límites (Presupuesto Diario/Semanal Dinámico)
+  const today = new Date();
+  const currentYear = today.getFullYear();
+  const currentMonth = today.getMonth(); // 0-indexed
+  const currentDate = today.getDate();
+
+  // Determinar mes objetivo
+  let targetYear = currentYear;
+  let targetMonth = currentMonth;
+  if (yearMonth) {
+    const parts = yearMonth.split('-');
+    if (parts.length === 2) {
+      targetYear = parseInt(parts[0], 10);
+      targetMonth = parseInt(parts[1], 10) - 1;
+    }
+  }
+
+  // Días totales en el mes objetivo
+  const totalDays = new Date(targetYear, targetMonth + 1, 0).getDate();
+
+  // Días restantes en el mes objetivo (incluyendo hoy)
+  let remainingDays = 1;
+  if (targetYear === currentYear && targetMonth === currentMonth) {
+    remainingDays = totalDays - currentDate + 1;
+  } else if (new Date(targetYear, targetMonth) > today) {
+    remainingDays = totalDays; // Mes futuro
+  } else {
+    remainingDays = 0; // Mes pasado
+  }
+
+  // Presupuesto diario original
+  const dailyOriginal = budgetLimit / totalDays;
+
+  // Presupuesto diario restante dinámico
+  const dailyRemaining = remainingDays > 0 ? remainingBudget / remainingDays : 0;
+
+  // Presupuesto semanal restante dinámico
+  const weeklyRemaining = dailyRemaining * Math.min(7, remainingDays);
+
+  // Semáforo de estado diario
+  let dailyRemainingStatus = {
+    bgColor: 'rgba(52, 199, 89, 0.1)',
+    textColor: 'var(--color-primary)',
+    icon: <Sparkles size={14} />,
+    message: ''
+  };
+
+  if (remainingBudget <= 0) {
+    dailyRemainingStatus = {
+      bgColor: 'var(--color-danger-light)',
+      textColor: 'var(--color-danger)',
+      icon: <Lock size={14} />,
+      message: '🔒 Límite de presupuesto mensual alcanzado. S/. 0.00 diario disponible.'
+    };
+  } else if (remainingDays === 0) {
+    dailyRemainingStatus = {
+      bgColor: '#7676800f',
+      textColor: 'var(--ios-text-secondary)',
+      icon: <CalendarDays size={14} />,
+      message: '⌛ El mes ha concluido.'
+    };
+  } else if (dailyRemaining >= dailyOriginal) {
+    const diff = dailyRemaining - dailyOriginal;
+    dailyRemainingStatus = {
+      bgColor: 'var(--color-primary-light)',
+      textColor: 'var(--color-primary)',
+      icon: <Sparkles size={14} />,
+      message: `🎉 ¡Margen positivo! Tienen S/. ${diff.toFixed(2)} más por día de lo presupuestado originalmente.`
+    };
+  } else {
+    const diff = dailyOriginal - dailyRemaining;
+    dailyRemainingStatus = {
+      bgColor: '#fffbe6',
+      textColor: '#b75e00',
+      icon: <AlertTriangle size={14} />,
+      message: `⚠️ Ajuste necesario: Deben gastar S/. ${diff.toFixed(2)} menos por día para cumplir la meta.`
+    };
+  }
 
   // Estados para modal de configuración
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -184,6 +263,79 @@ export default function Dashboard({ stats, user, onUpdateBudget, token }) {
               <Sparkles size={12} /> ¡Buen trabajo! Quedan S/. {remainingBudget.toFixed(2)} del presupuesto mensual.
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Micro-Límites: Control Diario y Semanal Dinámico */}
+      <div 
+        className="expenses-card" 
+        style={{ 
+          marginTop: '-4px', 
+          display: 'flex', 
+          flexDirection: 'column', 
+          gap: '12px',
+          border: '1px solid var(--ios-separator)',
+          boxShadow: 'var(--shadow-sm)'
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <span style={{ fontSize: '11px', fontWeight: '600', color: 'var(--ios-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Límite Diario Disponible
+            </span>
+            <div 
+              style={{ 
+                fontSize: '24px', 
+                fontWeight: '800', 
+                color: remainingBudget <= 0 ? 'var(--color-danger)' : dailyRemaining < dailyOriginal ? '#d46b08' : 'var(--color-primary)', 
+                marginTop: '4px', 
+                display: 'flex', 
+                alignItems: 'baseline', 
+                gap: '4px' 
+              }}
+            >
+              S/. {dailyRemaining.toFixed(2)}
+              <span style={{ fontSize: '12px', fontWeight: '500', color: 'var(--ios-text-secondary)' }}>/ día</span>
+            </div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <span style={{ fontSize: '11px', color: 'var(--ios-text-secondary)' }}>Esta semana:</span>
+            <div style={{ fontSize: '15px', fontWeight: '700', color: 'var(--ios-text)' }}>
+              S/. {weeklyRemaining.toFixed(2)}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ borderTop: '1px solid var(--ios-separator)', paddingTop: '10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--ios-text-secondary)', alignItems: 'center' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <CalendarDays size={12} style={{ color: 'var(--color-primary)' }} />
+              Días restantes: <strong>{remainingDays}</strong> de {totalDays}
+            </span>
+            <span>Original: S/. {dailyOriginal.toFixed(2)}/día</span>
+          </div>
+          
+          {/* Badge o Mensaje del Semáforo */}
+          <div 
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '8px', 
+              fontSize: '11px', 
+              fontWeight: '600',
+              padding: '8px 12px',
+              borderRadius: '10px',
+              backgroundColor: dailyRemainingStatus.bgColor,
+              color: dailyRemainingStatus.textColor,
+              marginTop: '4px',
+              lineHeight: '1.3'
+            }}
+          >
+            <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+              {dailyRemainingStatus.icon}
+            </div>
+            <span>{dailyRemainingStatus.message}</span>
+          </div>
         </div>
       </div>
 
