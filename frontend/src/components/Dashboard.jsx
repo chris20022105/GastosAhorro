@@ -49,7 +49,7 @@ export default function Dashboard({ stats, user, onUpdateBudget, token }) {
 
   const numChris = parseFloat(valChris) || 0;
   const numSolansh = parseFloat(valSolansh) || 0;
-  const combinedIncome = numChris + numSolansh;
+  const previewCombinedIncome = numChris + numSolansh;
 
   const handleSaveBudget = async (e) => {
     e.preventDefault();
@@ -109,7 +109,7 @@ export default function Dashboard({ stats, user, onUpdateBudget, token }) {
 
   // Autocompletar presupuesto límite
   const selectSuggestion = (percent) => {
-    const suggested = Math.round(combinedIncome * percent);
+    const suggested = Math.round(previewCombinedIncome * percent);
     setValLimit(suggested.toString());
   };
 
@@ -405,7 +405,7 @@ export default function Dashboard({ stats, user, onUpdateBudget, token }) {
           }}>
             <span style={{ color: 'var(--ios-text-secondary)' }}>Ingreso Neto Familiar</span>
             <span style={{ fontSize: '15px', color: 'var(--color-primary)', fontWeight: '700' }}>
-              S/. {combinedIncome.toFixed(2)}
+              S/. {previewCombinedIncome.toFixed(2)}
             </span>
           </div>
 
@@ -435,28 +435,28 @@ export default function Dashboard({ stats, user, onUpdateBudget, token }) {
                 type="button" 
                 className="budget-suggestion-btn" 
                 onClick={() => selectSuggestion(0.5)}
-                disabled={loading || combinedIncome <= 0}
+                disabled={loading || previewCombinedIncome <= 0}
               >
                 <div>50% Ahorro</div>
-                <div style={{ fontSize: '10px', color: 'var(--ios-text-secondary)', marginTop: '2px' }}>S/. {(combinedIncome * 0.5).toFixed(0)}</div>
+                <div style={{ fontSize: '10px', color: 'var(--ios-text-secondary)', marginTop: '2px' }}>S/. {(previewCombinedIncome * 0.5).toFixed(0)}</div>
               </button>
               <button 
                 type="button" 
                 className="budget-suggestion-btn" 
                 onClick={() => selectSuggestion(0.7)}
-                disabled={loading || combinedIncome <= 0}
+                disabled={loading || previewCombinedIncome <= 0}
               >
                 <div>70% Equilib.</div>
-                <div style={{ fontSize: '10px', color: 'var(--ios-text-secondary)', marginTop: '2px' }}>S/. {(combinedIncome * 0.7).toFixed(0)}</div>
+                <div style={{ fontSize: '10px', color: 'var(--ios-text-secondary)', marginTop: '2px' }}>S/. {(previewCombinedIncome * 0.7).toFixed(0)}</div>
               </button>
               <button 
                 type="button" 
                 className="budget-suggestion-btn" 
                 onClick={() => selectSuggestion(1.0)}
-                disabled={loading || combinedIncome <= 0}
+                disabled={loading || previewCombinedIncome <= 0}
               >
                 <div>100% Total</div>
-                <div style={{ fontSize: '10px', color: 'var(--ios-text-secondary)', marginTop: '2px' }}>S/. {combinedIncome.toFixed(0)}</div>
+                <div style={{ fontSize: '10px', color: 'var(--ios-text-secondary)', marginTop: '2px' }}>S/. {previewCombinedIncome.toFixed(0)}</div>
               </button>
             </div>
           </div>
