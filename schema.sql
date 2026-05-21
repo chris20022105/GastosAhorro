@@ -37,6 +37,29 @@ CREATE TABLE IF NOT EXISTS monthly_budgets (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Tabla para Meta de Ahorro Colectiva
+CREATE TABLE IF NOT EXISTS savings_goals (
+    id SERIAL PRIMARY KEY,
+    target_amount NUMERIC(10, 2) NOT NULL DEFAULT 5000.00 CHECK (target_amount > 0),
+    description TEXT NOT NULL DEFAULT 'Meta de Ahorro Colectiva',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Tabla para Depósitos/Aportes de Ahorro
+CREATE TABLE IF NOT EXISTS savings_deposits (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    amount NUMERIC(10, 2) NOT NULL CHECK (amount > 0),
+    description TEXT NOT NULL,
+    date DATE NOT NULL DEFAULT CURRENT_DATE,
+    user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    user_email TEXT NOT NULL,
+    spender_name TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Índice para consultas rápidas de ahorros por fecha
+CREATE INDEX IF NOT EXISTS idx_savings_deposits_date ON savings_deposits(date DESC);
+
 -- ============================================================================
 -- Semillas de Datos (Seed Data)
 -- Contraseña por defecto para ambos: Gastos2026!

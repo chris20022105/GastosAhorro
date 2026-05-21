@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { LogOut, Plus, PieChart, List, RefreshCw } from 'lucide-react';
+import { LogOut, Plus, PieChart, List, RefreshCw, Wallet, PiggyBank } from 'lucide-react';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import ExpenseList from './components/ExpenseList';
 import AddExpense from './components/AddExpense';
+import SavingsBox from './components/SavingsBox';
+
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem('token') || '');
   const [user, setUser] = useState(null);
   const [expenses, setExpenses] = useState([]);
   const [stats, setStats] = useState({ totalSpent: 0, partnerSpent: {}, categorySpent: {} });
+  const [mainTab, setMainTab] = useState('expenses'); // 'expenses' o 'savings'
   const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' o 'history'
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -165,59 +168,89 @@ export default function App() {
       </header>
 
       {/* Switcher de Vistas (iOS Segmented Control) */}
-      <div style={{ padding: '16px 20px 0 20px' }}>
-        <div className="segmented-control">
-          <button
-            className={activeTab === 'dashboard' ? 'active' : ''}
-            onClick={() => setActiveTab('dashboard')}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-              <PieChart size={14} />
-              <span>Resumen</span>
-            </div>
-          </button>
-          <button
-            className={activeTab === 'history' ? 'active' : ''}
-            onClick={() => setActiveTab('history')}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-              <List size={14} />
-              <span>Gastos ({expenses.length})</span>
-            </div>
-          </button>
+      {mainTab === 'expenses' && (
+        <div style={{ padding: '16px 20px 0 20px' }}>
+          <div className="segmented-control">
+            <button
+              className={activeTab === 'dashboard' ? 'active' : ''}
+              onClick={() => setActiveTab('dashboard')}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                <PieChart size={14} />
+                <span>Resumen</span>
+              </div>
+            </button>
+            <button
+              className={activeTab === 'history' ? 'active' : ''}
+              onClick={() => setActiveTab('history')}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                <List size={14} />
+                <span>Gastos ({expenses.length})</span>
+              </div>
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Contenido Principal */}
-      {activeTab === 'dashboard' ? (
-        <Dashboard stats={stats} user={user} onUpdateBudget={fetchData} token={token} />
+      {mainTab === 'expenses' ? (
+        activeTab === 'dashboard' ? (
+          <Dashboard stats={stats} user={user} onUpdateBudget={fetchData} token={token} />
+        ) : (
+          <ExpenseList 
+            expenses={expenses} 
+            onDeleteExpense={handleDeleteExpense} 
+            user={user} 
+          />
+        )
       ) : (
-        <ExpenseList 
-          expenses={expenses} 
-          onDeleteExpense={handleDeleteExpense} 
-          user={user} 
-        />
+        <SavingsBox token={token} user={user} showToast={showToast} />
       )}
 
       {/* Botón flotante para registrar gasto (FAB) */}
-      <button 
-        className={`fab ${stats.budget && stats.totalSpent >= stats.budget.budget_limit_pen ? 'fab-blocked' : ''}`} 
-        onClick={() => setIsAddOpen(true)} 
-        type="button"
-      >
-        <Plus size={18} />
-        <span>Nuevo Gasto</span>
-      </button>
+      {mainTab === 'expenses' && (
+        <button 
+          className={`fab ${stats.budget && stats.totalSpent >= stats.budget.budget_limit_pen ? 'fab-blocked' : ''}`} 
+          onClick={() => setIsAddOpen(true)} 
+          type="button"
+        >
+          <Plus size={18} />
+          <span>Nuevo Gasto</span>
+        </button>
+      )}
 
       {/* Bottom Sheet para agregar */}
-      <AddExpense
-        isOpen={isAddOpen}
-        onClose={() => setIsAddOpen(false)}
-        onExpenseAdded={handleExpenseAdded}
-        token={token}
-        user={user}
-        stats={stats}
-      />
+      {mainTab === 'expenses' && (
+        <AddExpense
+          isOpen={isAddOpen}
+          onClose={() => setIsAddOpen(false)}
+          onExpenseAdded={handleExpenseAdded}
+          token={token}
+          user={user}
+          stats={stats}
+        />
+      )}
+
+      {/* Barra de Navegación Inferior (iOS Tab Bar) */}
+      <nav className="bottom-tab-bar">
+        <button 
+          className={`tab-item ${mainTab === 'expenses' ? 'active' : ''}`}
+          onClick={() => setMainTab('expenses')}
+          type="button"
+        >
+          <Wallet size={20} />
+          <span>Gastos</span>
+        </button>
+        <button 
+          className={`tab-item ${mainTab === 'savings' ? 'active' : ''}`}
+          onClick={() => setMainTab('savings')}
+          type="button"
+        >
+          <PiggyBank size={20} />
+          <span>Caja Ahorro</span>
+        </button>
+      </nav>
     </div>
   );
 }

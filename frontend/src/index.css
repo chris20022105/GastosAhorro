@@ -62,7 +62,7 @@ button, input, select {
   flex-direction: column;
   background-color: var(--ios-bg);
   position: relative;
-  padding-bottom: 80px; /* Espacio para barra de navegación o botones */
+  padding-bottom: 96px; /* Espacio para barra de navegación o botones */
 }
 
 /* Estilos de Login */
@@ -548,7 +548,7 @@ button, input, select {
 /* Botón flotante para Agregar Gasto */
 .fab {
   position: fixed;
-  bottom: 24px;
+  bottom: 80px; /* Elevado para evitar colisión con bottom tab bar */
   left: 50%;
   transform: translateX(-50%);
   background-color: var(--color-primary);
@@ -825,3 +825,67 @@ button, input, select {
 .btn-settings:active {
   transform: scale(0.92);
 }
+
+/* ============================================================================
+   Barra de Navegación Inferior (iOS Bottom Tab Bar) y Estilos Ahorro
+   ============================================================================ */
+
+.bottom-tab-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 64px;
+  background-color: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid var(--ios-separator);
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  z-index: 98; /* Debajo de los bottom-sheets (z-index: 1000) pero encima de la app */
+  max-width: 600px;
+  margin: 0 auto;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.tab-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  color: var(--ios-text-secondary);
+  cursor: pointer;
+  padding: 8px 0;
+  transition: color 0.2s ease;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.tab-item:active {
+  opacity: 0.7;
+}
+
+.tab-item.active {
+  color: var(--color-primary);
+}
+
+/* Color verde esmeralda para pestaña de ahorros activa */
+.bottom-tab-bar .tab-item.active:nth-child(2) {
+  color: #2d6a4f;
+}
+
+/* FAB de Ahorros Verde Esmeralda */
+.fab-savings {
+  background-color: #2d6a4f !important;
+  box-shadow: 0 4px 16px rgba(45, 106, 79, 0.3) !important;
+}
+
+.fab-savings:active {
+  background-color: #1b4332 !important;
+}
+

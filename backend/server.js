@@ -38,7 +38,7 @@ if (!supabaseUrl || !supabaseKey || supabaseUrl.includes('tu-proyecto')) {
 const supabase = createClient(supabaseUrl || 'https://placeholder.supabase.co', supabaseKey || 'placeholder');
 
 // Importar servicio de correo
-const { sendExpenseNotification, sendBudgetExceededNotification } = require('./services/emailService');
+const { sendExpenseNotification, sendBudgetExceededNotification, sendSavingsNotification } = require('./services/emailService');
 
 // Helpers de zona horaria para Perú (GMT-5)
 const getPeruMonth = () => {
@@ -514,6 +514,198 @@ app.get('/api/stats', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('Error al calcular estadísticas:', err);
     res.status(500).json({ error: 'No se pudieron calcular las estadísticas.' });
+  }
+});
+
+// ============================================================================
+// RUTAS DE CAJA DE AHORRO
+// ============================================================================
+
+// Obtener meta de ahorro activa (inicializar si no existe)
+app.get('/api/savings/goal', authenticateToken, async (req, res) => {
+  try {
+    let { data: goals, error } = await supabase
+      .from('savings_goals')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    let activeGoal = goals && goals[0];
+
+    // Si no hay meta creada, inicializar una por defecto
+    if (!activeGoal) {
+      const defaultGoal = {
+        target_amount: 5000.00,
+        description: 'Meta de Ahorro Colectiva'
+      };
+
+      const { data: inserted, error: insertError } = await supabase
+        .from('savings_goals')
+        .insert([defaultGoal])
+        .select();
+
+      if (insertError) throw insertError;
+      activeGoal = inserted[0];
+    }
+
+    res.json(activeGoal);
+  } catch (err) {
+    console.error('Error al obtener meta de ahorro:', err);
+    res.status(500).json({ error: 'No se pudo cargar la meta de ahorro.' });
+  }
+});
+
+// Actualizar meta de ahorro
+app.put('/api/savings/goal', authenticateToken, async (req, res) => {
+  const { target_amount, description } = req.body;
+  const parsedTarget = parseFloat(target_amount);
+
+  if (isNaN(parsedTarget) || parsedTarget <= 0) {
+    return res.status(400).json({ error: 'El monto objetivo de la meta debe ser mayor a cero.' });
+  }
+
+  const desc = description ? description.trim() : 'Meta de Ahorro Colectiva';
+
+  try {
+    const { data: goals } = await supabase
+      .from('savings_goals')
+      .select('id')
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    let result;
+    if (goals && goals.length > 0) {
+      // Actualizar la existente
+      const { data: updated, error: updateError } = await supabase
+        .from('savings_goals')
+        .update({ target_amount: parsedTarget, description: desc })
+        .eq('id', goals[0].id)
+        .select();
+
+      if (updateError) throw updateError;
+      result = updated[0];
+    } else {
+      // Insertar nueva
+      const { data: inserted, error: insertError } = await supabase
+        .from('savings_goals')
+        .insert([{ target_amount: parsedTarget, description: desc }])
+        .select();
+
+      if (insertError) throw insertError;
+      result = inserted[0];
+    }
+
+    res.json(result);
+  } catch (err) {
+    console.error('Error al actualizar meta de ahorro:', err);
+    res.status(500).json({ error: 'No se pudo guardar la meta de ahorro.' });
+  }
+});
+
+// Obtener aportes/depósitos de ahorro
+app.get('/api/savings/deposits', authenticateToken, async (req, res) => {
+  try {
+    const { data: deposits, error } = await supabase
+      .from('savings_deposits')
+      .select('*')
+      .order('date', { ascending: false })
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    res.json(deposits || []);
+  } catch (err) {
+    console.error('Error al obtener depósitos de ahorro:', err);
+    res.status(500).json({ error: 'No se pudieron cargar los depósitos.' });
+  }
+});
+
+// Registrar nuevo aporte de ahorro
+app.post('/api/savings/deposits', authenticateToken, async (req, res) => {
+  const { amount, description, date } = req.body;
+
+  if (!amount || !description) {
+    return res.status(400).json({ error: 'Monto y descripción son requeridos.' });
+  }
+
+  const parsedAmount = parseFloat(amount);
+  if (isNaN(parsedAmount) || parsedAmount <= 0) {
+    return res.status(400).json({ error: 'El monto del aporte debe ser un número mayor a cero.' });
+  }
+
+  const depositDate = date || getPeruDate();
+
+  try {
+    // 1. Registrar el depósito
+    const newDeposit = {
+      amount: parsedAmount,
+      description: description.trim(),
+      date: depositDate,
+      user_id: req.user.id,
+      user_email: req.user.email,
+      spender_name: req.user.name
+    };
+
+    const { data: insertedData, error: insertError } = await supabase
+      .from('savings_deposits')
+      .insert([newDeposit])
+      .select();
+
+    if (insertError) throw insertError;
+    const createdDeposit = insertedData[0];
+
+    // 2. Traer el total de ahorros acumulado
+    const { data: allDeposits, error: fetchError } = await supabase
+      .from('savings_deposits')
+      .select('amount');
+
+    if (fetchError) throw fetchError;
+    const newTotalSavings = (allDeposits || []).reduce((sum, d) => sum + parseFloat(d.amount), 0);
+
+    // 3. Traer la meta activa
+    let { data: goals } = await supabase
+      .from('savings_goals')
+      .select('target_amount')
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    const goalAmount = (goals && goals[0]) ? parseFloat(goals[0].target_amount) : 5000.00;
+
+    // 4. Enviar notificación por correo de Brevo
+    sendSavingsNotification(createdDeposit, newTotalSavings, goalAmount).then(result => {
+      if (result.success) {
+        console.log(`Notificación de correo enviada para el aporte: ${createdDeposit.id}`);
+      } else {
+        console.error('Fallo al enviar el correo de aporte:', result.error);
+      }
+    }).catch(err => {
+      console.error('Error no controlado en sendSavingsNotification:', err);
+    });
+
+    res.status(201).json(createdDeposit);
+  } catch (err) {
+    console.error('Error al registrar aporte de ahorro:', err);
+    res.status(500).json({ error: 'No se pudo registrar el aporte de ahorro.' });
+  }
+});
+
+// Eliminar un aporte de ahorro
+app.delete('/api/savings/deposits/:id', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const { error } = await supabase
+      .from('savings_deposits')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+
+    res.json({ message: 'Aporte de ahorro eliminado con éxito.' });
+  } catch (err) {
+    console.error('Error al eliminar aporte de ahorro:', err);
+    res.status(500).json({ error: 'No se pudo eliminar el aporte de ahorro.' });
   }
 });
 
