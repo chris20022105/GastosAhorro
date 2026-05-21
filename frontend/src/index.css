@@ -121,7 +121,7 @@ button, input, select {
   border: 1px solid transparent;
   border-radius: 12px;
   padding: 12px 16px;
-  font-size: 15px;
+  font-size: 16px; /* Evita que iOS haga zoom automático al enfocar */
   outline: none;
   transition: all 0.2s ease;
 }
@@ -581,22 +581,34 @@ button, input, select {
   border-top-right-radius: 24px;
   box-shadow: var(--shadow-sheet);
   z-index: 1000;
-  padding: 24px 20px calc(24px + var(--safe-bottom)) 20px;
+  padding: 20px 20px calc(12px + var(--safe-bottom)) 20px;
   transform: translateY(100%);
   transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
   max-width: 600px;
   margin: 0 auto;
+  max-height: 85vh; /* Evita desborde de pantalla en móviles */
+  display: flex;
+  flex-direction: column;
 }
 
 .bottom-sheet.open {
   transform: translateY(0);
 }
 
+.bottom-sheet form {
+  overflow-y: auto;
+  flex-grow: 1;
+  -webkit-overflow-scrolling: touch; /* Scroll fluido en iOS */
+  padding-right: 4px;
+  margin-right: -4px;
+}
+
 .sheet-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
+  flex-shrink: 0;
 }
 
 .sheet-title {
