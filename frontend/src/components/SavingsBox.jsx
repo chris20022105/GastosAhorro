@@ -236,8 +236,8 @@ export default function SavingsBox({ token, user, showToast }) {
       <div 
         className="summary-card" 
         style={{ 
-          background: 'linear-gradient(135deg, #1b4332, #40916c)',
-          boxShadow: '0 8px 24px rgba(27, 67, 50, 0.15)'
+          background: 'linear-gradient(135deg, var(--color-primary), #3b503a)',
+          boxShadow: 'var(--shadow-md)'
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -284,7 +284,7 @@ export default function SavingsBox({ token, user, showToast }) {
 
       {/* Participación de Ahorro */}
       <div className="section-title" style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-        <Users size={16} style={{ color: '#2d6a4f' }} />
+        <Users size={16} style={{ color: 'var(--color-primary)' }} />
         <span>¿Quién ha aportado más?</span>
       </div>
 
@@ -298,7 +298,7 @@ export default function SavingsBox({ token, user, showToast }) {
                 <span className="partner-name">
                   {name.split(' ')[0]}
                 </span>
-                <span className="partner-amount" style={{ color: '#2d6a4f' }}>S/. {amount.toFixed(2)}</span>
+                <span className="partner-amount" style={{ color: 'var(--color-primary)' }}>S/. {amount.toFixed(2)}</span>
                 
                 <div style={{ marginTop: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--ios-text-secondary)', marginBottom: '4px' }}>
@@ -308,7 +308,7 @@ export default function SavingsBox({ token, user, showToast }) {
                   <div style={{ backgroundColor: '#7676800f', height: '6px', borderRadius: '3px', overflow: 'hidden' }}>
                     <div 
                       style={{ 
-                        backgroundColor: '#2d6a4f', 
+                        backgroundColor: 'var(--color-primary)', 
                         height: '100%', 
                         width: `${percent}%`,
                         borderRadius: '3px'
@@ -338,13 +338,13 @@ export default function SavingsBox({ token, user, showToast }) {
             {deposits.map((dep) => (
               <div key={dep.id} className="expense-item">
                 <div className="expense-left">
-                  <div className="category-emoji-box" style={{ backgroundColor: '#e2ede1', color: '#1b4332' }}>
+                  <div className="category-emoji-box" style={{ backgroundColor: 'var(--color-primary-light)', color: 'var(--color-primary)' }}>
                     🐷
                   </div>
                   <div className="expense-info">
                     <span className="expense-desc">{dep.description}</span>
                     <div className="expense-meta">
-                      <span className="spender-tag" style={{ backgroundColor: '#e2ede1', color: '#1b4332' }}>
+                      <span className="spender-tag" style={{ backgroundColor: 'var(--color-primary-light)', color: 'var(--color-primary)' }}>
                         {dep.spender_name.split(' ')[0]}
                       </span>
                       <span>•</span>
@@ -353,7 +353,7 @@ export default function SavingsBox({ token, user, showToast }) {
                   </div>
                 </div>
                 <div className="expense-right">
-                  <span className="expense-amount" style={{ color: '#2d6a4f' }}>+ S/. {parseFloat(dep.amount).toFixed(2)}</span>
+                  <span className="expense-amount" style={{ color: 'var(--color-primary)' }}>+ S/. {parseFloat(dep.amount).toFixed(2)}</span>
                   {user.id === dep.user_id && (
                     <button 
                       className="btn-delete"
@@ -430,7 +430,7 @@ export default function SavingsBox({ token, user, showToast }) {
                 fontWeight: '700', 
                 textAlign: 'center', 
                 letterSpacing: '-0.5px',
-                color: '#2d6a4f',
+                color: 'var(--color-primary)',
                 padding: '16px'
               }}
               placeholder="0.00"
@@ -506,7 +506,7 @@ export default function SavingsBox({ token, user, showToast }) {
             type="submit" 
             className="btn-primary" 
             disabled={depLoading} 
-            style={{ backgroundColor: '#2d6a4f' }}
+            style={{ backgroundColor: 'var(--color-primary)' }}
           >
             {depLoading ? (
               <span>Guardando y notificando...</span>
@@ -559,7 +559,7 @@ export default function SavingsBox({ token, user, showToast }) {
               type="number"
               step="0.01"
               className="form-input"
-              style={{ fontSize: '20px', fontWeight: '700', color: '#2d6a4f' }}
+              style={{ fontSize: '20px', fontWeight: '700', color: 'var(--color-primary)' }}
               value={goalAmount}
               onChange={(e) => setGoalAmount(e.target.value)}
               required
@@ -586,7 +586,7 @@ export default function SavingsBox({ token, user, showToast }) {
             type="submit" 
             className="btn-primary" 
             disabled={goalLoading}
-            style={{ backgroundColor: '#2d6a4f' }}
+            style={{ backgroundColor: 'var(--color-primary)' }}
           >
             {goalLoading ? 'Guardando...' : 'Guardar Meta'}
           </button>

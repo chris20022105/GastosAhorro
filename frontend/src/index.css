@@ -874,18 +874,18 @@ button, input, select {
   color: var(--color-primary);
 }
 
-/* Color verde esmeralda para pestaña de ahorros activa */
+/* Color para pestaña de ahorros activa */
 .bottom-tab-bar .tab-item.active:nth-child(2) {
-  color: #2d6a4f;
+  color: var(--color-primary);
 }
 
-/* FAB de Ahorros Verde Esmeralda */
+/* FAB de Ahorros con el mismo verde oscuro del Dashboard */
 .fab-savings {
-  background-color: #2d6a4f !important;
-  box-shadow: 0 4px 16px rgba(45, 106, 79, 0.3) !important;
+  background-color: var(--color-primary) !important;
+  box-shadow: 0 4px 16px rgba(44, 62, 43, 0.3) !important;
 }
 
 .fab-savings:active {
-  background-color: #1b4332 !important;
+  background-color: var(--color-accent) !important;
 }
 
