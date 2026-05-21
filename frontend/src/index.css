@@ -124,6 +124,23 @@ button, input, select {
   font-size: 16px; /* Evita que iOS haga zoom automático al enfocar */
   outline: none;
   transition: all 0.2s ease;
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0; /* Permite encoger en flex/grid */
+}
+
+/* Resets específicos para inputs de tipo fecha en iOS Safari */
+.form-input[type="date"] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-height: 45px; /* Altura mínima táctil */
+}
+
+.form-input[type="date"]::-webkit-date-and-time-value {
+  text-align: left;
+  min-height: 1.2em;
+  margin: 0;
+  padding: 0;
 }
 
 .form-input:focus {
@@ -597,10 +614,12 @@ button, input, select {
 
 .bottom-sheet form {
   overflow-y: auto;
+  overflow-x: hidden; /* Evita desplazamiento horizontal en móviles */
   flex-grow: 1;
   -webkit-overflow-scrolling: touch; /* Scroll fluido en iOS */
   padding-right: 4px;
   margin-right: -4px;
+  padding-bottom: 32px; /* Espacio extra abajo para el botón en pantallas pequeñas */
 }
 
 .sheet-header {
@@ -634,7 +653,7 @@ button, input, select {
 .category-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  gap: 6px; /* Reducido ligeramente para evitar desbordes */
   margin-bottom: 20px;
 }
 
@@ -642,7 +661,7 @@ button, input, select {
   background-color: #7676800c;
   border: 1px solid transparent;
   border-radius: 12px;
-  padding: 10px;
+  padding: 8px 4px; /* Reducido padding lateral para pantallas angostas */
   text-align: center;
   cursor: pointer;
   display: flex;
@@ -652,6 +671,15 @@ button, input, select {
   font-size: 11px;
   font-weight: 600;
   transition: all 0.2s ease;
+  min-width: 0; /* Permite encoger la columna si es necesario */
+}
+
+.category-grid-item span:not(.emoji) {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis; /* Evita que palabras largas como 'Entretenimiento' estiren la celda */
+  white-space: nowrap;
 }
 
 .category-grid-item .emoji {
