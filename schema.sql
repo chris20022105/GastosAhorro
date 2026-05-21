@@ -54,6 +54,8 @@ CREATE TABLE IF NOT EXISTS savings_deposits (
     user_id UUID REFERENCES users(id) ON DELETE SET NULL,
     user_email TEXT NOT NULL,
     spender_name TEXT NOT NULL,
+    is_from_salary BOOLEAN NOT NULL DEFAULT FALSE,
+    expense_id UUID REFERENCES expenses(id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 

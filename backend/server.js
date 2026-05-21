@@ -624,6 +624,7 @@ app.get('/api/savings/deposits', authenticateToken, async (req, res) => {
 // Registrar nuevo aporte de ahorro
 app.post('/api/savings/deposits', authenticateToken, async (req, res) => {
   const { amount, description, date } = req.body;
+  const isFromSalary = req.body.is_from_salary !== undefined ? req.body.is_from_salary : req.body.isFromSalary;
 
   if (!amount || !description) {
     return res.status(400).json({ error: 'Monto y descripción son requeridos.' });
@@ -635,16 +636,129 @@ app.post('/api/savings/deposits', authenticateToken, async (req, res) => {
   }
 
   const depositDate = date || getPeruDate();
+  const targetMonth = depositDate.substring(0, 7); // 'YYYY-MM'
 
   try {
-    // 1. Registrar el depósito
+    let expenseId = null;
+    let budget = null;
+    let budgetLimit = 3000.00;
+    let currentTotal = 0;
+
+    // Si proviene del sueldo, validar presupuesto e insertar gasto primero
+    if (isFromSalary) {
+      // 1. Obtener/Inicializar presupuesto de este mes
+      let { data: budgetData, error: budgetError } = await supabase
+        .from('monthly_budgets')
+        .select('*')
+        .eq('year_month', targetMonth)
+        .maybeSingle();
+
+      if (budgetError) throw budgetError;
+
+      if (!budgetData) {
+        const defaultBudget = {
+          year_month: targetMonth,
+          income_chris_pen: 2809.90,
+          income_solansh_pen: 1550.00,
+          budget_limit_pen: 3000.00,
+          email_sent_100: false
+        };
+
+        const { data: inserted, error: insertError } = await supabase
+          .from('monthly_budgets')
+          .insert([defaultBudget])
+          .select();
+
+        if (insertError) throw insertError;
+        budgetData = inserted[0];
+      }
+
+      budget = budgetData;
+      budgetLimit = parseFloat(budget.budget_limit_pen);
+
+      // 2. Calcular gastos ya registrados de este mes
+      const { data: monthExpenses, error: expError } = await supabase
+        .from('expenses')
+        .select('amount')
+        .gte('date', `${targetMonth}-01`)
+        .lte('date', `${targetMonth}-31`);
+
+      if (expError) throw expError;
+
+      currentTotal = (monthExpenses || []).reduce((sum, e) => sum + parseFloat(e.amount), 0);
+
+      // 3. Bloquear la transacción si el presupuesto mensual ya está agotado
+      if (currentTotal >= budgetLimit) {
+        return res.status(400).json({
+          error: `Presupuesto mensual agotado. Se ha consumido S/. ${currentTotal.toFixed(2)} de S/. ${budgetLimit.toFixed(2)}. No se permite registrar ahorros desde el sueldo.`
+        });
+      }
+
+      // 4. Crear el gasto automático de tipo "Ahorro"
+      const newExpense = {
+        amount: parsedAmount,
+        description: `Ahorro: ${description.trim()}`,
+        category: 'Ahorro',
+        date: depositDate,
+        user_id: req.user.id,
+        user_email: req.user.email,
+        spender_name: req.user.name
+      };
+
+      const { data: insertedExpenseData, error: expInsertError } = await supabase
+        .from('expenses')
+        .insert([newExpense])
+        .select();
+
+      if (expInsertError) throw expInsertError;
+      const createdExpense = insertedExpenseData[0];
+      expenseId = createdExpense.id;
+
+      const newTotal = currentTotal + parsedAmount;
+
+      // Enviar notificación del gasto creado en segundo plano
+      sendExpenseNotification(createdExpense).then(result => {
+        if (result.success) {
+          console.log(`Notificación de correo enviada para el gasto de ahorro: ${createdExpense.id}`);
+        } else {
+          console.error('Fallo al enviar correo de gasto de ahorro:', result.error);
+        }
+      }).catch(err => {
+        console.error('Error no controlado en sendExpenseNotification (gasto ahorro):', err);
+      });
+
+      // Enviar alerta de presupuesto al 100% si se alcanza el límite
+      if (newTotal >= budgetLimit && !budget.email_sent_100) {
+        supabase
+          .from('monthly_budgets')
+          .update({ email_sent_100: true })
+          .eq('year_month', targetMonth)
+          .then(({ error: updateError }) => {
+            if (updateError) console.error('Error al actualizar email_sent_100:', updateError);
+          });
+
+        sendBudgetExceededNotification(budget, newTotal).then(result => {
+          if (result.success) {
+            console.log(`Alerta de correo de presupuesto al 100% enviada para: ${targetMonth}`);
+          } else {
+            console.error('Fallo al enviar correo de alerta de presupuesto:', result.error);
+          }
+        }).catch(err => {
+          console.error('Error no controlado en sendBudgetExceededNotification:', err);
+        });
+      }
+    }
+
+    // Registrar el depósito
     const newDeposit = {
       amount: parsedAmount,
       description: description.trim(),
       date: depositDate,
       user_id: req.user.id,
       user_email: req.user.email,
-      spender_name: req.user.name
+      spender_name: req.user.name,
+      is_from_salary: !!isFromSalary,
+      expense_id: expenseId
     };
 
     const { data: insertedData, error: insertError } = await supabase
@@ -655,7 +769,7 @@ app.post('/api/savings/deposits', authenticateToken, async (req, res) => {
     if (insertError) throw insertError;
     const createdDeposit = insertedData[0];
 
-    // 2. Traer el total de ahorros acumulado
+    // Traer el total de ahorros acumulado
     const { data: allDeposits, error: fetchError } = await supabase
       .from('savings_deposits')
       .select('amount');
@@ -663,7 +777,7 @@ app.post('/api/savings/deposits', authenticateToken, async (req, res) => {
     if (fetchError) throw fetchError;
     const newTotalSavings = (allDeposits || []).reduce((sum, d) => sum + parseFloat(d.amount), 0);
 
-    // 3. Traer la meta activa
+    // Traer la meta activa
     let { data: goals } = await supabase
       .from('savings_goals')
       .select('target_amount')
@@ -672,7 +786,7 @@ app.post('/api/savings/deposits', authenticateToken, async (req, res) => {
 
     const goalAmount = (goals && goals[0]) ? parseFloat(goals[0].target_amount) : 5000.00;
 
-    // 4. Enviar notificación por correo de Brevo
+    // Enviar notificación por correo de Brevo del aporte de ahorro
     sendSavingsNotification(createdDeposit, newTotalSavings, goalAmount).then(result => {
       if (result.success) {
         console.log(`Notificación de correo enviada para el aporte: ${createdDeposit.id}`);
@@ -695,14 +809,69 @@ app.delete('/api/savings/deposits/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
 
   try {
-    const { error } = await supabase
+    // 1. Obtener detalles del depósito para verificar si tiene un gasto asociado
+    const { data: deposit, error: findError } = await supabase
+      .from('savings_deposits')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (findError || !deposit) {
+      return res.status(404).json({ error: 'El aporte de ahorro no existe.' });
+    }
+
+    // 2. Eliminar el depósito de ahorro
+    const { error: deleteDepError } = await supabase
       .from('savings_deposits')
       .delete()
       .eq('id', id);
 
-    if (error) throw error;
+    if (deleteDepError) throw deleteDepError;
 
-    res.json({ message: 'Aporte de ahorro eliminado con éxito.' });
+    // 3. Si tiene un gasto asociado, eliminarlo del historial de gastos
+    if (deposit.expense_id) {
+      const { data: expense } = await supabase
+        .from('expenses')
+        .select('*')
+        .eq('id', deposit.expense_id)
+        .maybeSingle();
+
+      if (expense) {
+        const targetMonth = expense.date.substring(0, 7);
+
+        // Eliminar el gasto
+        await supabase
+          .from('expenses')
+          .delete()
+          .eq('id', deposit.expense_id);
+
+        // Recalcular total de gastos de este mes
+        const { data: monthExpenses } = await supabase
+          .from('expenses')
+          .select('amount')
+          .gte('date', `${targetMonth}-01`)
+          .lte('date', `${targetMonth}-31`);
+
+        const newTotal = (monthExpenses || []).reduce((sum, e) => sum + parseFloat(e.amount), 0);
+
+        // Obtener presupuesto para ver si corresponde resetear email_sent_100
+        const { data: budget } = await supabase
+          .from('monthly_budgets')
+          .select('*')
+          .eq('year_month', targetMonth)
+          .maybeSingle();
+
+        if (budget && newTotal < parseFloat(budget.budget_limit_pen) && budget.email_sent_100) {
+          await supabase
+            .from('monthly_budgets')
+            .update({ email_sent_100: false })
+            .eq('year_month', targetMonth);
+          console.log(`Restablecido email_sent_100 a false para el mes ${targetMonth} tras eliminar ahorro y su gasto correspondiente`);
+        }
+      }
+    }
+
+    res.json({ message: 'Aporte de ahorro y gasto asociado eliminados con éxito.' });
   } catch (err) {
     console.error('Error al eliminar aporte de ahorro:', err);
     res.status(500).json({ error: 'No se pudo eliminar el aporte de ahorro.' });

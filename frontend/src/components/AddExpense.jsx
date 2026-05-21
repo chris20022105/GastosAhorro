@@ -39,6 +39,7 @@ export default function AddExpense({ isOpen, onClose, onExpenseAdded, token, use
     { name: 'Transporte y Uber', emoji: '🚗' },
     { name: 'Suscripciones', emoji: '📺' },
     { name: 'Entretenimiento', emoji: '🎬' },
+    { name: 'Ahorro', emoji: '🐷' },
     { name: 'Otros', emoji: '📦' }
   ];
 

@@ -33,6 +33,7 @@ async function sendExpenseNotification(expense) {
     'Transporte y Uber': '🚗',
     'Suscripciones': '📺',
     'Entretenimiento': '🎬',
+    'Ahorro': '🐷',
     'Otros': '📦'
   };
 

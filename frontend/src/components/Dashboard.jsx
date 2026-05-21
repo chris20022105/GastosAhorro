@@ -11,6 +11,9 @@ export default function Dashboard({ stats, user, onUpdateBudget, token }) {
 
   const progressPercent = Math.min((totalSpent / budgetLimit) * 100, 100);
   const remainingBudget = Math.max(budgetLimit - totalSpent, 0);
+  const combinedIncome = incomeChris + incomeSolansh;
+  const salaryProgressPercent = combinedIncome > 0 ? Math.min((totalSpent / combinedIncome) * 100, 100) : 0;
+  const remainingSalary = Math.max(combinedIncome - totalSpent, 0);
   const isExceeded = totalSpent >= budgetLimit;
   const isNearLimit = totalSpent >= budgetLimit * 0.9 && totalSpent < budgetLimit;
 
@@ -91,6 +94,7 @@ export default function Dashboard({ stats, user, onUpdateBudget, token }) {
     'Transporte y Uber': '🚗',
     'Suscripciones': '📺',
     'Entretenimiento': '🎬',
+    'Ahorro': '🐷',
     'Otros': '📦'
   };
 
@@ -187,6 +191,54 @@ export default function Dashboard({ stats, user, onUpdateBudget, token }) {
               <Sparkles size={12} /> ¡Buen trabajo! Quedan S/. {remainingBudget.toFixed(2)} del presupuesto mensual.
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Indicador de Consumo de Sueldo Combinado */}
+      <div 
+        className="expenses-card" 
+        style={{ 
+          marginTop: '-4px', 
+          display: 'flex', 
+          flexDirection: 'column', 
+          gap: '12px',
+          border: '1px solid var(--ios-separator)',
+          boxShadow: 'var(--shadow-sm)'
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <span style={{ fontSize: '11px', fontWeight: '600', color: 'var(--ios-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Consumo de Sueldos Netos
+            </span>
+            <div style={{ fontSize: '20px', fontWeight: '700', color: 'var(--ios-text)', marginTop: '4px' }}>
+              S/. {totalSpent.toFixed(2)} <span style={{ fontSize: '13px', fontWeight: '500', color: 'var(--ios-text-secondary)' }}>gastados</span>
+            </div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <span style={{ fontSize: '11px', color: 'var(--ios-text-secondary)' }}>Sueldo Familiar:</span>
+            <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--color-primary)' }}>
+              S/. {combinedIncome.toFixed(2)}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ marginTop: '4px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--ios-text-secondary)', marginBottom: '4px' }}>
+            <span>Consumo Familiar ({salaryProgressPercent.toFixed(0)}%)</span>
+            <span>Restan S/. {remainingSalary.toFixed(2)} libres</span>
+          </div>
+          <div style={{ backgroundColor: '#7676800f', height: '8px', borderRadius: '4px', overflow: 'hidden' }}>
+            <div 
+              style={{ 
+                backgroundColor: 'var(--color-primary)', 
+                height: '100%', 
+                width: `${salaryProgressPercent}%`,
+                borderRadius: '4px',
+                transition: 'width 0.8s cubic-bezier(0.16, 1, 0.3, 1)'
+              }}
+            ></div>
+          </div>
         </div>
       </div>
 

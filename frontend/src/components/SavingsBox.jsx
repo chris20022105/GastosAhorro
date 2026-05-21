@@ -12,6 +12,7 @@ export default function SavingsBox({ token, user, showToast }) {
   const [depAmount, setDepAmount] = useState('');
   const [depDescription, setDepDescription] = useState('');
   const [depDate, setDepDate] = useState('');
+  const [isFromSalary, setIsFromSalary] = useState(true);
   const [depLoading, setDepLoading] = useState(false);
   const [depError, setDepError] = useState('');
 
@@ -65,6 +66,7 @@ export default function SavingsBox({ token, user, showToast }) {
       setDepDescription('');
       setDepDate(new Date().toISOString().split('T')[0]);
       setDepError('');
+      setIsFromSalary(true);
     }
   }, [isDepositOpen]);
 
@@ -136,7 +138,8 @@ export default function SavingsBox({ token, user, showToast }) {
         body: JSON.stringify({
           amount: parsedAmount,
           description: depDescription.trim(),
-          date: depDate
+          date: depDate,
+          is_from_salary: isFromSalary
         })
       });
 
@@ -347,6 +350,14 @@ export default function SavingsBox({ token, user, showToast }) {
                       <span className="spender-tag" style={{ backgroundColor: 'var(--color-primary-light)', color: 'var(--color-primary)' }}>
                         {dep.spender_name.split(' ')[0]}
                       </span>
+                      {dep.is_from_salary && (
+                        <>
+                          <span>•</span>
+                          <span className="spender-tag" style={{ backgroundColor: '#e5e5ea', color: '#555', fontSize: '9px', fontWeight: 'bold' }}>
+                            💼 Sueldo
+                          </span>
+                        </>
+                      )}
                       <span>•</span>
                       <span>{new Date(dep.date + 'T00:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</span>
                     </div>
@@ -440,6 +451,34 @@ export default function SavingsBox({ token, user, showToast }) {
               disabled={depLoading}
               autoFocus={isDepositOpen}
             />
+          </div>
+
+          {/* Origen de los Fondos */}
+          <div className="form-group" style={{ marginBottom: '16px' }}>
+            <label className="form-label">Origen de los Fondos</label>
+            <div className="segmented-control" style={{ margin: '4px 0' }}>
+              <button 
+                type="button" 
+                className={isFromSalary ? 'active' : ''} 
+                onClick={() => setIsFromSalary(true)}
+                disabled={depLoading}
+              >
+                💼 Sueldo del Mes
+              </button>
+              <button 
+                type="button" 
+                className={!isFromSalary ? 'active' : ''} 
+                onClick={() => setIsFromSalary(false)}
+                disabled={depLoading}
+              >
+                🌍 Externo
+              </button>
+            </div>
+            <span style={{ fontSize: '11px', color: 'var(--ios-text-secondary)', marginTop: '4px', paddingLeft: '4px', lineHeight: '1.3', display: 'block' }}>
+              {isFromSalary 
+                ? '🐷 Se registrará en la Caja y también como Gasto "Ahorro" (afecta el presupuesto mensual).' 
+                : '✅ Solo ingresará a la Caja. No afectará el presupuesto de gastos.'}
+            </span>
           </div>
 
           {/* Descripción / Origen */}
