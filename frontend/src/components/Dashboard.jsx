@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Wallet, Sparkles, Heart, Sliders, X, Lock, AlertTriangle } from 'lucide-react';
+import useScrollLock from '../hooks/useScrollLock';
 
 export default function Dashboard({ stats, user, onUpdateBudget, token }) {
   const { totalSpent = 0, partnerSpent = {}, categorySpent = {}, budget } = stats;
@@ -37,19 +38,7 @@ export default function Dashboard({ stats, user, onUpdateBudget, token }) {
   }, [isModalOpen, incomeChris, incomeSolansh, budgetLimit]);
 
   // Bloquear scroll del fondo cuando el modal de configuración está abierto
-  useEffect(() => {
-    if (isModalOpen) {
-      document.body.classList.add('no-scroll');
-      document.documentElement.classList.add('no-scroll');
-    } else {
-      document.body.classList.remove('no-scroll');
-      document.documentElement.classList.remove('no-scroll');
-    }
-    return () => {
-      document.body.classList.remove('no-scroll');
-      document.documentElement.classList.remove('no-scroll');
-    };
-  }, [isModalOpen]);
+  useScrollLock(isModalOpen);
 
   const numChris = parseFloat(valChris) || 0;
   const numSolansh = parseFloat(valSolansh) || 0;

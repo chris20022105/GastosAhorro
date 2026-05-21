@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Sliders, X, Plus, Calendar, Edit3, Trash2, TrendingUp, Award, Users } from 'lucide-react';
+import useScrollLock from '../hooks/useScrollLock';
 
 export default function SavingsBox({ token, user, showToast }) {
   const [goal, setGoal] = useState({ target_amount: 5000, description: 'Meta de Ahorro Colectiva' });
@@ -79,19 +80,7 @@ export default function SavingsBox({ token, user, showToast }) {
   }, [isGoalOpen, goal]);
 
   // Bloqueo de scroll cuando los modales están abiertos
-  useEffect(() => {
-    if (isDepositOpen || isGoalOpen) {
-      document.body.classList.add('no-scroll');
-      document.documentElement.classList.add('no-scroll');
-    } else {
-      document.body.classList.remove('no-scroll');
-      document.documentElement.classList.remove('no-scroll');
-    }
-    return () => {
-      document.body.classList.remove('no-scroll');
-      document.documentElement.classList.remove('no-scroll');
-    };
-  }, [isDepositOpen, isGoalOpen]);
+  useScrollLock(isDepositOpen || isGoalOpen);
 
   // Totales
   const totalSaved = deposits.reduce((sum, d) => sum + parseFloat(d.amount), 0);
