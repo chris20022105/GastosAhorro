@@ -624,7 +624,8 @@ app.get('/api/savings/deposits', authenticateToken, async (req, res) => {
 // Registrar nuevo aporte de ahorro
 app.post('/api/savings/deposits', authenticateToken, async (req, res) => {
   const { amount, description, date } = req.body;
-  const isFromSalary = req.body.is_from_salary !== undefined ? req.body.is_from_salary : req.body.isFromSalary;
+  const rawIsFromSalary = req.body.is_from_salary !== undefined ? req.body.is_from_salary : req.body.isFromSalary;
+  const isFromSalary = rawIsFromSalary === true || rawIsFromSalary === 'true';
 
   if (!amount || !description) {
     return res.status(400).json({ error: 'Monto y descripción son requeridos.' });

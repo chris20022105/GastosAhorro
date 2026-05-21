@@ -398,14 +398,14 @@ export default function SavingsBox({ token, user, showToast }) {
       {/* MODAL DE APORTE (Bottom Sheet) */}
       <div 
         className={`overlay ${isDepositOpen ? 'open' : ''}`} 
-        onClick={() => setIsDepositOpen(false)}
+        onClick={() => !depLoading && setIsDepositOpen(false)}
         onTouchMove={(e) => e.preventDefault()}
       ></div>
 
       <div className={`bottom-sheet ${isDepositOpen ? 'open' : ''}`}>
         <div className="sheet-header" onTouchMove={(e) => e.preventDefault()}>
           <span className="sheet-title">Aportar a Caja de Ahorro</span>
-          <button className="btn-close" onClick={() => setIsDepositOpen(false)} type="button">
+          <button className="btn-close" onClick={() => !depLoading && setIsDepositOpen(false)} type="button" disabled={depLoading}>
             <X size={18} />
           </button>
         </div>
@@ -562,14 +562,14 @@ export default function SavingsBox({ token, user, showToast }) {
       {/* MODAL CONFIGURACIÓN META (Bottom Sheet) */}
       <div 
         className={`overlay ${isGoalOpen ? 'open' : ''}`} 
-        onClick={() => setIsGoalOpen(false)}
+        onClick={() => !goalLoading && setIsGoalOpen(false)}
         onTouchMove={(e) => e.preventDefault()}
       ></div>
 
       <div className={`bottom-sheet ${isGoalOpen ? 'open' : ''}`}>
         <div className="sheet-header" onTouchMove={(e) => e.preventDefault()}>
           <span className="sheet-title">Configurar Meta de Ahorro</span>
-          <button className="btn-close" onClick={() => setIsGoalOpen(false)} type="button">
+          <button className="btn-close" onClick={() => !goalLoading && setIsGoalOpen(false)} type="button" disabled={goalLoading}>
             <X size={18} />
           </button>
         </div>

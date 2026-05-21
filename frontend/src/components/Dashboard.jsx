@@ -332,14 +332,14 @@ export default function Dashboard({ stats, user, onUpdateBudget, token }) {
       {/* MODAL CONFIGURACIÓN DE INGRESOS Y PRESUPUESTO (Estilo Bottom Sheet iOS) */}
       <div 
         className={`overlay ${isModalOpen ? 'open' : ''}`} 
-        onClick={() => setIsModalOpen(false)}
+        onClick={() => !loading && setIsModalOpen(false)}
         onTouchMove={(e) => e.preventDefault()}
       ></div>
       
       <div className={`bottom-sheet ${isModalOpen ? 'open' : ''}`}>
         <div className="sheet-header" onTouchMove={(e) => e.preventDefault()}>
           <span className="sheet-title">Configuración del Mes ({yearMonth})</span>
-          <button className="btn-close" onClick={() => setIsModalOpen(false)} type="button">
+          <button className="btn-close" onClick={() => !loading && setIsModalOpen(false)} type="button" disabled={loading}>
             <X size={18} />
           </button>
         </div>

@@ -39,7 +39,6 @@ export default function AddExpense({ isOpen, onClose, onExpenseAdded, token, use
     { name: 'Transporte y Uber', emoji: '🚗' },
     { name: 'Suscripciones', emoji: '📺' },
     { name: 'Entretenimiento', emoji: '🎬' },
-    { name: 'Ahorro', emoji: '🐷' },
     { name: 'Otros', emoji: '📦' }
   ];
 
@@ -105,7 +104,7 @@ export default function AddExpense({ isOpen, onClose, onExpenseAdded, token, use
       {/* Fondo oscuro traslúcido */}
       <div 
         className={`overlay ${isOpen ? 'open' : ''}`} 
-        onClick={onClose}
+        onClick={() => !loading && onClose()}
         onTouchMove={(e) => e.preventDefault()}
       ></div>
 
@@ -113,7 +112,7 @@ export default function AddExpense({ isOpen, onClose, onExpenseAdded, token, use
       <div className={`bottom-sheet ${isOpen ? 'open' : ''}`}>
         <div className="sheet-header" onTouchMove={(e) => e.preventDefault()}>
           <span className="sheet-title">Registrar Gasto Hormiga</span>
-          <button className="btn-close" onClick={onClose} type="button">
+          <button className="btn-close" onClick={() => !loading && onClose()} type="button" disabled={loading}>
             <X size={18} />
           </button>
         </div>
