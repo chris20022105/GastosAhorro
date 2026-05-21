@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Plus, Calendar, Edit3 } from 'lucide-react';
 
 export default function AddExpense({ isOpen, onClose, onExpenseAdded, token, user, stats }) {
@@ -102,7 +103,7 @@ export default function AddExpense({ isOpen, onClose, onExpenseAdded, token, use
     }
   };
 
-  return (
+  return createPortal(
     <>
       {/* Fondo oscuro traslúcido */}
       <div 
@@ -279,6 +280,7 @@ export default function AddExpense({ isOpen, onClose, onExpenseAdded, token, use
           </button>
         </form>
       </div>
-    </>
+    </>,
+    document.body
   );
 }

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Sliders, X, Plus, Calendar, Edit3, Trash2, TrendingUp, Award, Users } from 'lucide-react';
 
 export default function SavingsBox({ token, user, showToast }) {
@@ -402,214 +403,222 @@ export default function SavingsBox({ token, user, showToast }) {
       </button>
 
       {/* MODAL DE APORTE (Bottom Sheet) */}
-      <div 
-        className={`overlay ${isDepositOpen ? 'open' : ''}`} 
-        onClick={() => !depLoading && setIsDepositOpen(false)}
-        onTouchMove={(e) => e.preventDefault()}
-      ></div>
-
-      <div className={`bottom-sheet ${isDepositOpen ? 'open' : ''}`}>
-        <div className="sheet-header" onTouchMove={(e) => e.preventDefault()}>
-          <span className="sheet-title">Aportar a Caja de Ahorro</span>
-          <button className="btn-close" onClick={() => !depLoading && setIsDepositOpen(false)} type="button" disabled={depLoading}>
-            <X size={18} />
-          </button>
-        </div>
-
-        {depError && (
+      {createPortal(
+        <>
           <div 
-            style={{
-              backgroundColor: 'var(--color-danger-light)',
-              color: 'var(--color-danger)',
-              padding: '10px 14px',
-              borderRadius: '12px',
-              fontSize: '13px',
-              fontWeight: '600',
-              marginBottom: '16px'
-            }}
-          >
-            {depError}
-          </div>
-        )}
+            className={`overlay ${isDepositOpen ? 'open' : ''}`} 
+            onClick={() => !depLoading && setIsDepositOpen(false)}
+            onTouchMove={(e) => e.preventDefault()}
+          ></div>
 
-        <form onSubmit={handleSaveDeposit}>
-          {/* Monto del Aporte */}
-          <div className="form-group" style={{ marginBottom: '16px' }}>
-            <label className="form-label">Monto a Ahorrar (S/.)</label>
-            <input
-              type="number"
-              step="0.01"
-              pattern="[0-9]*"
-              inputMode="decimal"
-              className="form-input"
-              style={{ 
-                fontSize: '28px', 
-                fontWeight: '700', 
-                textAlign: 'center', 
-                letterSpacing: '-0.5px',
-                color: 'var(--color-primary)',
-                padding: '16px'
-              }}
-              placeholder="0.00"
-              value={depAmount}
-              onChange={(e) => setDepAmount(e.target.value)}
-              required
-              disabled={depLoading}
-              autoFocus={isDepositOpen}
-            />
-          </div>
-
-          {/* Origen de los Fondos */}
-          <div className="form-group" style={{ marginBottom: '16px' }}>
-            <label className="form-label">Origen de los Fondos</label>
-            <div className="segmented-control" style={{ margin: '4px 0' }}>
-              <button 
-                type="button" 
-                className={isFromSalary ? 'active' : ''} 
-                onClick={() => setIsFromSalary(true)}
-                disabled={depLoading}
-              >
-                💼 Sueldo del Mes
-              </button>
-              <button 
-                type="button" 
-                className={!isFromSalary ? 'active' : ''} 
-                onClick={() => setIsFromSalary(false)}
-                disabled={depLoading}
-              >
-                🌍 Externo
+          <div className={`bottom-sheet ${isDepositOpen ? 'open' : ''}`}>
+            <div className="sheet-header" onTouchMove={(e) => e.preventDefault()}>
+              <span className="sheet-title">Aportar a Caja de Ahorro</span>
+              <button className="btn-close" onClick={() => !depLoading && setIsDepositOpen(false)} type="button" disabled={depLoading}>
+                <X size={18} />
               </button>
             </div>
-            <span style={{ fontSize: '11px', color: 'var(--ios-text-secondary)', marginTop: '4px', paddingLeft: '4px', lineHeight: '1.3', display: 'block' }}>
-              {isFromSalary 
-                ? '🐷 Se registrará en la Caja y también como Gasto "Ahorro" (afecta el presupuesto mensual).' 
-                : '✅ Solo ingresará a la Caja. No afectará el presupuesto de gastos.'}
-            </span>
-          </div>
 
-
-
-          {/* Fecha */}
-          <div className="form-group" style={{ marginBottom: '24px' }}>
-            <label className="form-label" htmlFor="dep-date">Fecha</label>
-            <div style={{ position: 'relative' }}>
-              <input
-                id="dep-date"
-                type="date"
-                className="form-input"
-                style={{ width: '100%', paddingLeft: '40px' }}
-                value={depDate}
-                onChange={(e) => setDepDate(e.target.value)}
-                required
-                disabled={depLoading}
-              />
-              <Calendar 
-                size={16} 
-                style={{ 
-                  position: 'absolute', 
-                  left: '14px', 
-                  top: '50%', 
-                  transform: 'translateY(-50%)',
-                  color: 'var(--ios-text-secondary)'
-                }} 
-              />
-            </div>
-          </div>
-
-          <div style={{ fontSize: '12px', color: 'var(--ios-text-secondary)', textAlign: 'center', marginBottom: '20px', fontWeight: '500' }}>
-            Aportando a nombre de: <span style={{ color: 'var(--ios-text)', fontWeight: '700' }}>{user.name}</span>
-          </div>
-
-          <button 
-            type="submit" 
-            className="btn-primary" 
-            disabled={depLoading} 
-            style={{ backgroundColor: 'var(--color-primary)' }}
-          >
-            {depLoading ? (
-              <span>Guardando y notificando...</span>
-            ) : (
-              <>
-                <Plus size={18} />
-                <span>Registrar Ahorro</span>
-              </>
+            {depError && (
+              <div 
+                style={{
+                  backgroundColor: 'var(--color-danger-light)',
+                  color: 'var(--color-danger)',
+                  padding: '10px 14px',
+                  borderRadius: '12px',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  marginBottom: '16px'
+                }}
+              >
+                {depError}
+              </div>
             )}
-          </button>
-        </form>
-      </div>
+
+            <form onSubmit={handleSaveDeposit}>
+              {/* Monto del Aporte */}
+              <div className="form-group" style={{ marginBottom: '16px' }}>
+                <label className="form-label">Monto a Ahorrar (S/.)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  pattern="[0-9]*"
+                  inputMode="decimal"
+                  className="form-input"
+                  style={{ 
+                    fontSize: '28px', 
+                    fontWeight: '700', 
+                    textAlign: 'center', 
+                    letterSpacing: '-0.5px',
+                    color: 'var(--color-primary)',
+                    padding: '16px'
+                  }}
+                  placeholder="0.00"
+                  value={depAmount}
+                  onChange={(e) => setDepAmount(e.target.value)}
+                  required
+                  disabled={depLoading}
+                  autoFocus={isDepositOpen}
+                />
+              </div>
+
+              {/* Origen de los Fondos */}
+              <div className="form-group" style={{ marginBottom: '16px' }}>
+                <label className="form-label">Origen de los Fondos</label>
+                <div className="segmented-control" style={{ margin: '4px 0' }}>
+                  <button 
+                    type="button" 
+                    className={isFromSalary ? 'active' : ''} 
+                    onClick={() => setIsFromSalary(true)}
+                    disabled={depLoading}
+                  >
+                    💼 Sueldo del Mes
+                  </button>
+                  <button 
+                    type="button" 
+                    className={!isFromSalary ? 'active' : ''} 
+                    onClick={() => setIsFromSalary(false)}
+                    disabled={depLoading}
+                  >
+                    🌍 Externo
+                  </button>
+                </div>
+                <span style={{ fontSize: '11px', color: 'var(--ios-text-secondary)', marginTop: '4px', paddingLeft: '4px', lineHeight: '1.3', display: 'block' }}>
+                  {isFromSalary 
+                    ? '🐷 Se registrará en la Caja y también como Gasto "Ahorro" (afecta el presupuesto mensual).' 
+                    : '✅ Solo ingresará a la Caja. No afectará el presupuesto de gastos.'}
+                </span>
+              </div>
+
+              {/* Fecha */}
+              <div className="form-group" style={{ marginBottom: '24px' }}>
+                <label className="form-label" htmlFor="dep-date">Fecha</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    id="dep-date"
+                    type="date"
+                    className="form-input"
+                    style={{ width: '100%', paddingLeft: '40px' }}
+                    value={depDate}
+                    onChange={(e) => setDepDate(e.target.value)}
+                    required
+                    disabled={depLoading}
+                  />
+                  <Calendar 
+                    size={16} 
+                    style={{ 
+                      position: 'absolute', 
+                      left: '14px', 
+                      top: '50%', 
+                      transform: 'translateY(-50%)',
+                      color: 'var(--ios-text-secondary)'
+                    }} 
+                  />
+                </div>
+              </div>
+
+              <div style={{ fontSize: '12px', color: 'var(--ios-text-secondary)', textAlign: 'center', marginBottom: '20px', fontWeight: '500' }}>
+                Aportando a nombre de: <span style={{ color: 'var(--ios-text)', fontWeight: '700' }}>{user.name}</span>
+              </div>
+
+              <button 
+                type="submit" 
+                className="btn-primary" 
+                disabled={depLoading} 
+                style={{ backgroundColor: 'var(--color-primary)' }}
+              >
+                {depLoading ? (
+                  <span>Guardando y notificando...</span>
+                ) : (
+                  <>
+                    <Plus size={18} />
+                    <span>Registrar Ahorro</span>
+                  </>
+                )}
+              </button>
+            </form>
+          </div>
+        </>,
+        document.body
+      )}
 
       {/* MODAL CONFIGURACIÓN META (Bottom Sheet) */}
-      <div 
-        className={`overlay ${isGoalOpen ? 'open' : ''}`} 
-        onClick={() => !goalLoading && setIsGoalOpen(false)}
-        onTouchMove={(e) => e.preventDefault()}
-      ></div>
-
-      <div className={`bottom-sheet ${isGoalOpen ? 'open' : ''}`}>
-        <div className="sheet-header" onTouchMove={(e) => e.preventDefault()}>
-          <span className="sheet-title">Configurar Meta de Ahorro</span>
-          <button className="btn-close" onClick={() => !goalLoading && setIsGoalOpen(false)} type="button" disabled={goalLoading}>
-            <X size={18} />
-          </button>
-        </div>
-
-        {goalError && (
+      {createPortal(
+        <>
           <div 
-            style={{
-              backgroundColor: 'var(--color-danger-light)',
-              color: 'var(--color-danger)',
-              padding: '10px 14px',
-              borderRadius: '12px',
-              fontSize: '13px',
-              fontWeight: '600',
-              marginBottom: '16px'
-            }}
-          >
-            {goalError}
-          </div>
-        )}
+            className={`overlay ${isGoalOpen ? 'open' : ''}`} 
+            onClick={() => !goalLoading && setIsGoalOpen(false)}
+            onTouchMove={(e) => e.preventDefault()}
+          ></div>
 
-        <form onSubmit={handleSaveGoal}>
-          {/* Monto Objetivo */}
-          <div className="form-group" style={{ marginBottom: '16px' }}>
-            <label className="form-label">Monto Meta Objetivo (S/.)</label>
-            <input
-              type="number"
-              step="0.01"
-              className="form-input"
-              style={{ fontSize: '20px', fontWeight: '700', color: 'var(--color-primary)' }}
-              value={goalAmount}
-              onChange={(e) => setGoalAmount(e.target.value)}
-              required
-              disabled={goalLoading}
-              placeholder="5000.00"
-            />
-          </div>
+          <div className={`bottom-sheet ${isGoalOpen ? 'open' : ''}`}>
+            <div className="sheet-header" onTouchMove={(e) => e.preventDefault()}>
+              <span className="sheet-title">Configurar Meta de Ahorro</span>
+              <button className="btn-close" onClick={() => !goalLoading && setIsGoalOpen(false)} type="button" disabled={goalLoading}>
+                <X size={18} />
+              </button>
+            </div>
 
-          {/* Nombre/Descripción de la meta */}
-          <div className="form-group" style={{ marginBottom: '24px' }}>
-            <label className="form-label">Nombre/Motivo de la Meta</label>
-            <input
-              type="text"
-              className="form-input"
-              value={goalDescription}
-              onChange={(e) => setGoalDescription(e.target.value)}
-              required
-              disabled={goalLoading}
-              placeholder="Ej. Meta de Ahorro Colectiva, Viaje, Auto..."
-            />
-          </div>
+            {goalError && (
+              <div 
+                style={{
+                  backgroundColor: 'var(--color-danger-light)',
+                  color: 'var(--color-danger)',
+                  padding: '10px 14px',
+                  borderRadius: '12px',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  marginBottom: '16px'
+                }}
+              >
+                {goalError}
+              </div>
+            )}
 
-          <button 
-            type="submit" 
-            className="btn-primary" 
-            disabled={goalLoading}
-            style={{ backgroundColor: 'var(--color-primary)' }}
-          >
-            {goalLoading ? 'Guardando...' : 'Guardar Meta'}
-          </button>
-        </form>
-      </div>
+            <form onSubmit={handleSaveGoal}>
+              {/* Monto Objetivo */}
+              <div className="form-group" style={{ marginBottom: '16px' }}>
+                <label className="form-label">Monto Meta Objetivo (S/.)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  className="form-input"
+                  style={{ fontSize: '20px', fontWeight: '700', color: 'var(--color-primary)' }}
+                  value={goalAmount}
+                  onChange={(e) => setGoalAmount(e.target.value)}
+                  required
+                  disabled={goalLoading}
+                  placeholder="5000.00"
+                />
+              </div>
+
+              {/* Nombre/Descripción de la meta */}
+              <div className="form-group" style={{ marginBottom: '24px' }}>
+                <label className="form-label">Nombre/Motivo de la Meta</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={goalDescription}
+                  onChange={(e) => setGoalDescription(e.target.value)}
+                  required
+                  disabled={goalLoading}
+                  placeholder="Ej. Meta de Ahorro Colectiva, Viaje, Auto..."
+                />
+              </div>
+
+              <button 
+                type="submit" 
+                className="btn-primary" 
+                disabled={goalLoading}
+                style={{ backgroundColor: 'var(--color-primary)' }}
+              >
+                {goalLoading ? 'Guardando...' : 'Guardar Meta'}
+              </button>
+            </form>
+          </div>
+        </>,
+        document.body
+      )}
     </div>
   );
 }
