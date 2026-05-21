@@ -27,6 +27,16 @@ CREATE TABLE IF NOT EXISTS expenses (
 -- Índice para mejorar el rendimiento de consultas ordenadas por fecha
 CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date DESC);
 
+-- Tabla de Presupuestos e Ingresos Mensuales (en Soles)
+CREATE TABLE IF NOT EXISTS monthly_budgets (
+    year_month VARCHAR(7) PRIMARY KEY, -- Formato 'YYYY-MM'
+    income_chris_pen NUMERIC(10, 2) DEFAULT 2809.90,
+    income_solansh_pen NUMERIC(10, 2) DEFAULT 1550.00,
+    budget_limit_pen NUMERIC(10, 2) DEFAULT 3000.00,
+    email_sent_100 BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- ============================================================================
 -- Semillas de Datos (Seed Data)
 -- Contraseña por defecto para ambos: Gastos2026!

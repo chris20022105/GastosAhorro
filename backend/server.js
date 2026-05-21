@@ -38,7 +38,23 @@ if (!supabaseUrl || !supabaseKey || supabaseUrl.includes('tu-proyecto')) {
 const supabase = createClient(supabaseUrl || 'https://placeholder.supabase.co', supabaseKey || 'placeholder');
 
 // Importar servicio de correo
-const { sendExpenseNotification } = require('./services/emailService');
+const { sendExpenseNotification, sendBudgetExceededNotification } = require('./services/emailService');
+
+// Helpers de zona horaria para Perú (GMT-5)
+const getPeruMonth = () => {
+  const d = new Date();
+  const utc = d.getTime() + (d.getTimezoneOffset() * 60000);
+  const peruDate = new Date(utc + (3600000 * -5));
+  return peruDate.toISOString().substring(0, 7); // 'YYYY-MM'
+};
+
+const getPeruDate = () => {
+  const d = new Date();
+  const utc = d.getTime() + (d.getTimezoneOffset() * 60000);
+  const peruDate = new Date(utc + (3600000 * -5));
+  return peruDate.toISOString().split('T')[0]; // 'YYYY-MM-DD'
+};
+
 
 // Middleware para verificar JWT
 const authenticateToken = (req, res, next) => {
@@ -149,12 +165,61 @@ app.post('/api/expenses', authenticateToken, async (req, res) => {
     return res.status(400).json({ error: 'El monto debe ser un número mayor a cero.' });
   }
 
+  const expenseDate = date || getPeruDate();
+  const targetMonth = expenseDate.substring(0, 7); // 'YYYY-MM'
+
   try {
+    // 1. Obtener presupuesto de este mes (inicializar si no existe)
+    let { data: budget, error: budgetError } = await supabase
+      .from('monthly_budgets')
+      .select('*')
+      .eq('year_month', targetMonth)
+      .maybeSingle();
+
+    if (budgetError) throw budgetError;
+
+    if (!budget) {
+      const defaultBudget = {
+        year_month: targetMonth,
+        income_chris_pen: 2809.90,
+        income_solansh_pen: 1550.00,
+        budget_limit_pen: 3000.00,
+        email_sent_100: false
+      };
+
+      const { data: inserted, error: insertError } = await supabase
+        .from('monthly_budgets')
+        .insert([defaultBudget])
+        .select();
+
+      if (insertError) throw insertError;
+      budget = inserted[0];
+    }
+
+    // 2. Calcular gastos ya registrados de este mes
+    const { data: monthExpenses, error: expError } = await supabase
+      .from('expenses')
+      .select('amount')
+      .gte('date', `${targetMonth}-01`)
+      .lte('date', `${targetMonth}-31`);
+
+    if (expError) throw expError;
+
+    const currentTotal = (monthExpenses || []).reduce((sum, e) => sum + parseFloat(e.amount), 0);
+    const budgetLimit = parseFloat(budget.budget_limit_pen);
+
+    // 3. Si el presupuesto ya está agotado o superado, bloquear la transacción
+    if (currentTotal >= budgetLimit) {
+      return res.status(400).json({
+        error: `Presupuesto mensual agotado. Se ha consumido S/. ${currentTotal.toFixed(2)} de S/. ${budgetLimit.toFixed(2)}. No se permite registrar más gastos.`
+      });
+    }
+
     const newExpense = {
       amount: parsedAmount,
       description: description.trim(),
       category: category.trim(),
-      date: date || new Date().toISOString().split('T')[0],
+      date: expenseDate,
       user_id: req.user.id,
       user_email: req.user.email,
       spender_name: req.user.name
@@ -169,6 +234,7 @@ app.post('/api/expenses', authenticateToken, async (req, res) => {
     if (error) throw error;
 
     const createdExpense = insertedData[0];
+    const newTotal = currentTotal + parsedAmount;
 
     // Enviar notificación de correo en segundo plano
     sendExpenseNotification(createdExpense).then(result => {
@@ -180,6 +246,28 @@ app.post('/api/expenses', authenticateToken, async (req, res) => {
     }).catch(err => {
       console.error('Error no controlado en sendExpenseNotification:', err);
     });
+
+    // Enviar notificación de presupuesto completado (100%) si cruza el límite
+    if (newTotal >= budgetLimit && !budget.email_sent_100) {
+      // Marcar de inmediato en BD para evitar envíos duplicados
+      supabase
+        .from('monthly_budgets')
+        .update({ email_sent_100: true })
+        .eq('year_month', targetMonth)
+        .then(({ error: updateError }) => {
+          if (updateError) console.error('Error al actualizar email_sent_100:', updateError);
+        });
+
+      sendBudgetExceededNotification(budget, newTotal).then(result => {
+        if (result.success) {
+          console.log(`Alerta de correo de presupuesto al 100% enviada para: ${targetMonth}`);
+        } else {
+          console.error('Fallo al enviar correo de alerta de presupuesto:', result.error);
+        }
+      }).catch(err => {
+        console.error('Error no controlado en sendBudgetExceededNotification:', err);
+      });
+    }
 
     res.status(201).json(createdExpense);
   } catch (err) {
@@ -193,12 +281,51 @@ app.delete('/api/expenses/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
 
   try {
-    const { error } = await supabase
+    // 1. Obtener detalles del gasto para saber la fecha y monto
+    const { data: expense, error: findError } = await supabase
+      .from('expenses')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (findError || !expense) {
+      return res.status(404).json({ error: 'El gasto no existe.' });
+    }
+
+    const targetMonth = expense.date.substring(0, 7);
+
+    // 2. Eliminar de la base de datos
+    const { error: deleteError } = await supabase
       .from('expenses')
       .delete()
       .eq('id', id);
 
-    if (error) throw error;
+    if (deleteError) throw deleteError;
+
+    // 3. Recalcular total de gastos de este mes
+    const { data: monthExpenses } = await supabase
+      .from('expenses')
+      .select('amount')
+      .gte('date', `${targetMonth}-01`)
+      .lte('date', `${targetMonth}-31`);
+
+    const newTotal = (monthExpenses || []).reduce((sum, e) => sum + parseFloat(e.amount), 0);
+
+    // 4. Obtener presupuesto de este mes
+    const { data: budget } = await supabase
+      .from('monthly_budgets')
+      .select('*')
+      .eq('year_month', targetMonth)
+      .maybeSingle();
+
+    if (budget && newTotal < parseFloat(budget.budget_limit_pen) && budget.email_sent_100) {
+      // Restablecer el flag de correo enviado si cayó por debajo
+      await supabase
+        .from('monthly_budgets')
+        .update({ email_sent_100: false })
+        .eq('year_month', targetMonth);
+      console.log(`Restablecido email_sent_100 a false para el mes ${targetMonth} tras eliminar gasto`);
+    }
 
     res.json({ message: 'Gasto eliminado con éxito.' });
   } catch (err) {
@@ -207,13 +334,145 @@ app.delete('/api/expenses/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// Obtener estadísticas agregadas
-app.get('/api/stats', authenticateToken, async (req, res) => {
+// ============================================================================
+// RUTAS DE PRESUPUESTO
+// ============================================================================
+
+// Obtener o inicializar presupuesto mensual
+app.get('/api/budget/:yearMonth', authenticateToken, async (req, res) => {
+  const { yearMonth } = req.params;
+
+  if (!/^\d{4}-\d{2}$/.test(yearMonth)) {
+    return res.status(400).json({ error: 'Formato de mes inválido. Debe ser YYYY-MM.' });
+  }
+
   try {
-    // Traer todos los gastos
+    let { data: budget, error } = await supabase
+      .from('monthly_budgets')
+      .select('*')
+      .eq('year_month', yearMonth)
+      .maybeSingle();
+
+    if (error) throw error;
+
+    if (!budget) {
+      const defaultBudget = {
+        year_month: yearMonth,
+        income_chris_pen: 2809.90,
+        income_solansh_pen: 1550.00,
+        budget_limit_pen: 3000.00,
+        email_sent_100: false
+      };
+
+      const { data: inserted, error: insertError } = await supabase
+        .from('monthly_budgets')
+        .insert([defaultBudget])
+        .select();
+
+      if (insertError) throw insertError;
+      budget = inserted[0];
+    }
+
+    res.json(budget);
+  } catch (err) {
+    console.error('Error al obtener presupuesto:', err);
+    res.status(500).json({ error: 'No se pudo cargar el presupuesto.' });
+  }
+});
+
+// Actualizar presupuesto mensual
+app.put('/api/budget/:yearMonth', authenticateToken, async (req, res) => {
+  const { yearMonth } = req.params;
+  const { income_chris_pen, income_solansh_pen, budget_limit_pen } = req.body;
+
+  if (!/^\d{4}-\d{2}$/.test(yearMonth)) {
+    return res.status(400).json({ error: 'Formato de mes inválido. Debe ser YYYY-MM.' });
+  }
+
+  const chrisIncome = parseFloat(income_chris_pen);
+  const solanshIncome = parseFloat(income_solansh_pen);
+  const limit = parseFloat(budget_limit_pen);
+
+  if (isNaN(chrisIncome) || chrisIncome < 0 || isNaN(solanshIncome) || solanshIncome < 0 || isNaN(limit) || limit < 0) {
+    return res.status(400).json({ error: 'Ingresos y límites deben ser valores numéricos mayores o iguales a cero.' });
+  }
+
+  try {
+    const { data: currentBudget } = await supabase
+      .from('monthly_budgets')
+      .select('*')
+      .eq('year_month', yearMonth)
+      .maybeSingle();
+
+    const { data: expenses } = await supabase
+      .from('expenses')
+      .select('amount')
+      .gte('date', `${yearMonth}-01`)
+      .lte('date', `${yearMonth}-31`);
+
+    const totalSpent = (expenses || []).reduce((sum, exp) => sum + parseFloat(exp.amount), 0);
+    const shouldResetEmail = totalSpent < limit;
+
+    const updates = {
+      income_chris_pen: chrisIncome,
+      income_solansh_pen: solanshIncome,
+      budget_limit_pen: limit,
+      email_sent_100: currentBudget ? (shouldResetEmail ? false : currentBudget.email_sent_100) : false
+    };
+
+    const { data: updated, error } = await supabase
+      .from('monthly_budgets')
+      .update(updates)
+      .eq('year_month', yearMonth)
+      .select();
+
+    if (error) throw error;
+
+    res.json(updated[0]);
+  } catch (err) {
+    console.error('Error al actualizar presupuesto:', err);
+    res.status(500).json({ error: 'No se pudo actualizar el presupuesto.' });
+  }
+});
+
+// Obtener estadísticas agregadas (mensual)
+app.get('/api/stats', authenticateToken, async (req, res) => {
+  const month = req.query.month || getPeruMonth();
+
+  try {
+    // 1. Obtener/Inicializar presupuesto de este mes
+    let { data: budget, error: budgetError } = await supabase
+      .from('monthly_budgets')
+      .select('*')
+      .eq('year_month', month)
+      .maybeSingle();
+
+    if (budgetError) throw budgetError;
+
+    if (!budget) {
+      const defaultBudget = {
+        year_month: month,
+        income_chris_pen: 2809.90,
+        income_solansh_pen: 1550.00,
+        budget_limit_pen: 3000.00,
+        email_sent_100: false
+      };
+
+      const { data: inserted, error: insertError } = await supabase
+        .from('monthly_budgets')
+        .insert([defaultBudget])
+        .select();
+
+      if (insertError) throw insertError;
+      budget = inserted[0];
+    }
+
+    // 2. Traer todos los gastos de este mes
     const { data: expenses, error } = await supabase
       .from('expenses')
-      .select('*');
+      .select('*')
+      .gte('date', `${month}-01`)
+      .lte('date', `${month}-31`);
 
     if (error) throw error;
 
@@ -234,7 +493,7 @@ app.get('/api/stats', authenticateToken, async (req, res) => {
       });
     }
 
-    expenses.forEach(exp => {
+    (expenses || []).forEach(exp => {
       const amt = parseFloat(exp.amount);
       totalSpent += amt;
 
@@ -246,9 +505,11 @@ app.get('/api/stats', authenticateToken, async (req, res) => {
     });
 
     res.json({
+      month,
       totalSpent,
       partnerSpent,
-      categorySpent
+      categorySpent,
+      budget
     });
   } catch (err) {
     console.error('Error al calcular estadísticas:', err);

@@ -1,12 +1,75 @@
-import React from 'react';
-import { Wallet, Sparkles, Heart } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Wallet, Sparkles, Heart, Sliders, X, Lock, AlertTriangle } from 'lucide-react';
 
-export default function Dashboard({ stats, user }) {
-  const { totalSpent = 0, partnerSpent = {}, categorySpent = {} } = stats;
-  
-  // Presupuesto mensual por defecto (configurable mentalmente en S/. 500 para gastos hormiga)
-  const monthlyBudget = 600; 
-  const progressPercent = Math.min((totalSpent / monthlyBudget) * 100, 100);
+export default function Dashboard({ stats, user, onUpdateBudget, token }) {
+  const { totalSpent = 0, partnerSpent = {}, categorySpent = {}, budget } = stats;
+
+  const budgetLimit = budget ? parseFloat(budget.budget_limit_pen) : 3000;
+  const incomeChris = budget ? parseFloat(budget.income_chris_pen) : 2809.90;
+  const incomeSolansh = budget ? parseFloat(budget.income_solansh_pen) : 1550.00;
+  const yearMonth = budget ? budget.year_month : new Date().toISOString().substring(0, 7);
+
+  const progressPercent = Math.min((totalSpent / budgetLimit) * 100, 100);
+  const remainingBudget = Math.max(budgetLimit - totalSpent, 0);
+  const isExceeded = totalSpent >= budgetLimit;
+  const isNearLimit = totalSpent >= budgetLimit * 0.9 && totalSpent < budgetLimit;
+
+  // Estados para modal de configuración
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [valChris, setValChris] = useState('');
+  const [valSolansh, setValSolansh] = useState('');
+  const [valLimit, setValLimit] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  // Inicializar inputs cuando se abre el modal
+  useEffect(() => {
+    if (isModalOpen) {
+      setValChris(incomeChris.toString());
+      setValSolansh(incomeSolansh.toString());
+      setValLimit(budgetLimit.toString());
+      setError('');
+    }
+  }, [isModalOpen, incomeChris, incomeSolansh, budgetLimit]);
+
+  const numChris = parseFloat(valChris) || 0;
+  const numSolansh = parseFloat(valSolansh) || 0;
+  const combinedIncome = numChris + numSolansh;
+
+  const handleSaveBudget = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    try {
+      const response = await fetch(`/api/budget/${yearMonth}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          income_chris_pen: numChris,
+          income_solansh_pen: numSolansh,
+          budget_limit_pen: parseFloat(valLimit) || 0
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Error al guardar el presupuesto');
+      }
+
+      setIsModalOpen(false);
+      if (onUpdateBudget) {
+        onUpdateBudget();
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Emojis de categoría
   const categoryEmojis = {
@@ -28,34 +91,100 @@ export default function Dashboard({ stats, user }) {
     return Math.round((amount / totalSpent) * 100);
   };
 
+  // Autocompletar presupuesto límite
+  const selectSuggestion = (percent) => {
+    const suggested = Math.round(combinedIncome * percent);
+    setValLimit(suggested.toString());
+  };
+
   return (
     <div className="dashboard-content">
+      {/* Banner de bloqueo (100% de Presupuesto) */}
+      {isExceeded && (
+        <div className="alert-banner alert-banner-danger" style={{ animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)' }}>
+          <Lock size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
+          <div>
+            <strong>¡Presupuesto Agotado (100%)!</strong>
+            Se ha consumido S/. {totalSpent.toFixed(2)} de S/. {budgetLimit.toFixed(2)}. Se envió una alerta por correo a ambos y se ha bloqueado el registro de más gastos hasta el próximo mes o hasta que aumenten el presupuesto.
+          </div>
+        </div>
+      )}
+
+      {/* Banner de advertencia (90% de Presupuesto) */}
+      {isNearLimit && (
+        <div className="alert-banner alert-banner-warning" style={{ animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)' }}>
+          <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
+          <div>
+            <strong>¡Alerta de Consumo Elevado (90%)!</strong>
+            Han consumido el {progressPercent.toFixed(0)}% del límite mensual. Saldo libre restante: <strong>S/. {remainingBudget.toFixed(2)}</strong>. ¡Hora de cuidar los gastos hormiga!
+          </div>
+        </div>
+      )}
+
       {/* Tarjeta de Resumen Mensual */}
-      <div className="summary-card">
+      <div 
+        className="summary-card" 
+        style={{ 
+          background: isExceeded 
+            ? 'linear-gradient(135deg, #a8071a, #cf1322)' 
+            : isNearLimit 
+              ? 'linear-gradient(135deg, #d46b08, #b75e00)' 
+              : 'linear-gradient(135deg, var(--color-primary), #3b503a)',
+          transition: 'background 0.5s ease'
+        }}
+      >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
             <span className="summary-label">Gastos del Mes</span>
             <div className="summary-total">S/. {totalSpent.toFixed(2)}</div>
           </div>
-          <div style={{ backgroundColor: 'rgba(255,255,255,0.15)', padding: '10px', borderRadius: '16px' }}>
-            <Wallet size={24} />
-          </div>
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            style={{ 
+              backgroundColor: 'rgba(255,255,255,0.15)', 
+              padding: '10px', 
+              borderRadius: '16px', 
+              border: 'none', 
+              color: '#ffffff',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.92)'}
+            onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
+            title="Configurar Presupuesto e Ingresos"
+          >
+            <Sliders size={20} />
+          </button>
         </div>
         
         <div className="progress-container">
           <div className="progress-info">
-            <span>Presupuesto objetivo: S/. {monthlyBudget}</span>
+            <span>Presupuesto objetivo: S/. {budgetLimit.toFixed(2)}</span>
             <span>{progressPercent.toFixed(0)}%</span>
           </div>
-          <div className="progress-bar-bg">
+          <div className="progress-bar-bg" style={{ backgroundColor: 'rgba(255, 255, 255, 0.25)' }}>
             <div 
               className="progress-bar-fill" 
-              style={{ width: `${progressPercent}%`, backgroundColor: progressPercent > 90 ? 'var(--color-danger)' : '#ffffff' }}
+              style={{ 
+                width: `${progressPercent}%`, 
+                backgroundColor: '#ffffff'
+              }}
             ></div>
           </div>
-          {totalSpent > monthlyBudget && (
-            <div style={{ fontSize: '11px', color: '#ffb3b3', marginTop: '6px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <Sparkles size={12} /> ¡Ups! Superamos el límite ideal este mes.
+          {isExceeded ? (
+            <div style={{ fontSize: '11px', color: '#ffb3b3', marginTop: '8px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <Lock size={12} /> Límite alcanzado. Registro deshabilitado.
+            </div>
+          ) : isNearLimit ? (
+            <div style={{ fontSize: '11px', color: '#ffe58f', marginTop: '8px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <AlertTriangle size={12} /> ¡Atención! Solo quedan S/. {remainingBudget.toFixed(2)} libres.
+            </div>
+          ) : (
+            <div style={{ fontSize: '11px', color: '#e2ede1', marginTop: '8px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <Sparkles size={12} /> ¡Buen trabajo! Quedan S/. {remainingBudget.toFixed(2)} del presupuesto mensual.
             </div>
           )}
         </div>
@@ -101,7 +230,7 @@ export default function Dashboard({ stats, user }) {
           })
         ) : (
           <div className="partner-card" style={{ gridColumn: 'span 2', alignItems: 'center', padding: '24px', color: 'var(--ios-text-secondary)' }}>
-            Aún no hay gastos registrados.
+            Aún no hay gastos registrados este mes.
           </div>
         )}
       </div>
@@ -143,9 +272,144 @@ export default function Dashboard({ stats, user }) {
             })
         ) : (
           <div style={{ textAlign: 'center', color: 'var(--ios-text-secondary)', padding: '16px 0' }}>
-            Registra gastos para ver el desglose.
+            Registra gastos para ver el desglose mensual.
           </div>
         )}
+      </div>
+
+      {/* MODAL CONFIGURACIÓN DE INGRESOS Y PRESUPUESTO (Estilo Bottom Sheet iOS) */}
+      <div className={`overlay ${isModalOpen ? 'open' : ''}`} onClick={() => setIsModalOpen(false)}></div>
+      
+      <div className={`bottom-sheet ${isModalOpen ? 'open' : ''}`}>
+        <div className="sheet-header">
+          <span className="sheet-title">Configuración del Mes ({yearMonth})</span>
+          <button className="btn-close" onClick={() => setIsModalOpen(false)} type="button">
+            <X size={18} />
+          </button>
+        </div>
+
+        {error && (
+          <div 
+            style={{
+              backgroundColor: 'var(--color-danger-light)',
+              color: 'var(--color-danger)',
+              padding: '10px 14px',
+              borderRadius: '12px',
+              fontSize: '13px',
+              fontWeight: '600',
+              marginBottom: '16px'
+            }}
+          >
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSaveBudget}>
+          {/* Ingreso Christopher */}
+          <div className="form-group" style={{ marginBottom: '14px' }}>
+            <label className="form-label">Sueldo Neto Christopher (S/.)</label>
+            <input 
+              type="number" 
+              step="0.01" 
+              className="form-input" 
+              value={valChris} 
+              onChange={(e) => setValChris(e.target.value)} 
+              disabled={loading}
+              placeholder="2809.90"
+              required
+            />
+          </div>
+
+          {/* Ingreso Solansh */}
+          <div className="form-group" style={{ marginBottom: '14px' }}>
+            <label className="form-label">Sueldo Neto Solansh (S/.)</label>
+            <input 
+              type="number" 
+              step="0.01" 
+              className="form-input" 
+              value={valSolansh} 
+              onChange={(e) => setValSolansh(e.target.value)} 
+              disabled={loading}
+              placeholder="1550.00"
+              required
+            />
+          </div>
+
+          {/* Sueldo combinado informativo */}
+          <div style={{ 
+            backgroundColor: '#7676800c', 
+            borderRadius: '14px', 
+            padding: '12px 16px', 
+            marginBottom: '16px',
+            fontSize: '13px',
+            fontWeight: '600',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}>
+            <span style={{ color: 'var(--ios-text-secondary)' }}>Ingreso Neto Familiar</span>
+            <span style={{ fontSize: '15px', color: 'var(--color-primary)', fontWeight: '700' }}>
+              S/. {combinedIncome.toFixed(2)}
+            </span>
+          </div>
+
+          {/* Presupuesto Límite */}
+          <div className="form-group" style={{ marginBottom: '8px' }}>
+            <label className="form-label">Presupuesto Límite de Gasto (S/.)</label>
+            <input 
+              type="number" 
+              step="0.01" 
+              className="form-input" 
+              style={{ fontSize: '20px', fontWeight: '700', color: 'var(--color-primary)' }}
+              value={valLimit} 
+              onChange={(e) => setValLimit(e.target.value)} 
+              disabled={loading}
+              placeholder="3000.00"
+              required
+            />
+          </div>
+
+          {/* Panel de sugerencias */}
+          <div style={{ marginBottom: '24px' }}>
+            <span style={{ fontSize: '11px', color: 'var(--ios-text-secondary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.3px', paddingLeft: '4px' }}>
+              Sugerencias de límite de gasto
+            </span>
+            <div className="budget-modal-suggestions">
+              <button 
+                type="button" 
+                className="budget-suggestion-btn" 
+                onClick={() => selectSuggestion(0.5)}
+                disabled={loading || combinedIncome <= 0}
+              >
+                <div>50% Ahorro</div>
+                <div style={{ fontSize: '10px', color: 'var(--ios-text-secondary)', marginTop: '2px' }}>S/. {(combinedIncome * 0.5).toFixed(0)}</div>
+              </button>
+              <button 
+                type="button" 
+                className="budget-suggestion-btn" 
+                onClick={() => selectSuggestion(0.7)}
+                disabled={loading || combinedIncome <= 0}
+              >
+                <div>70% Equilib.</div>
+                <div style={{ fontSize: '10px', color: 'var(--ios-text-secondary)', marginTop: '2px' }}>S/. {(combinedIncome * 0.7).toFixed(0)}</div>
+              </button>
+              <button 
+                type="button" 
+                className="budget-suggestion-btn" 
+                onClick={() => selectSuggestion(1.0)}
+                disabled={loading || combinedIncome <= 0}
+              >
+                <div>100% Total</div>
+                <div style={{ fontSize: '10px', color: 'var(--ios-text-secondary)', marginTop: '2px' }}>S/. {combinedIncome.toFixed(0)}</div>
+              </button>
+            </div>
+          </div>
+
+          {/* Botón de envío */}
+          <button type="submit" className="btn-primary" disabled={loading}>
+            {loading ? 'Guardando...' : 'Guardar Presupuesto'}
+          </button>
+        </form>
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Calendar, Edit3 } from 'lucide-react';
 
-export default function AddExpense({ isOpen, onClose, onExpenseAdded, token, user }) {
+export default function AddExpense({ isOpen, onClose, onExpenseAdded, token, user, stats }) {
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('Café y Bebidas');
@@ -30,9 +30,19 @@ export default function AddExpense({ isOpen, onClose, onExpenseAdded, token, use
     { name: 'Otros', emoji: '📦' }
   ];
 
+  const budget = stats?.budget;
+  const totalSpent = stats?.totalSpent || 0;
+  const budgetLimit = budget ? parseFloat(budget.budget_limit_pen) : 3000;
+  const isBlocked = budget && totalSpent >= budgetLimit;
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    if (isBlocked) {
+      setError('El presupuesto de este mes ya está agotado. No se permiten registrar más gastos.');
+      return;
+    }
 
     const parsedAmount = parseFloat(amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
@@ -90,6 +100,24 @@ export default function AddExpense({ isOpen, onClose, onExpenseAdded, token, use
             <X size={18} />
           </button>
         </div>
+
+        {isBlocked && (
+          <div 
+            style={{
+              backgroundColor: 'var(--color-danger-light)',
+              color: 'var(--color-danger)',
+              padding: '12px 14px',
+              borderRadius: '12px',
+              fontSize: '13px',
+              fontWeight: '600',
+              marginBottom: '16px',
+              lineHeight: '1.4',
+              border: '1px solid rgba(217, 56, 56, 0.2)'
+            }}
+          >
+            ⚠️ El presupuesto mensual se ha agotado o superado (S/. {totalSpent.toFixed(2)} de S/. {budgetLimit.toFixed(2)}). No se permiten registrar más gastos.
+          </div>
+        )}
 
         {error && (
           <div 
@@ -213,9 +241,16 @@ export default function AddExpense({ isOpen, onClose, onExpenseAdded, token, use
           </div>
 
           {/* Botón de envío */}
-          <button type="submit" className="btn-primary" disabled={loading}>
+          <button 
+            type="submit" 
+            className="btn-primary" 
+            disabled={loading || isBlocked} 
+            style={{ backgroundColor: isBlocked ? '#86868b' : '' }}
+          >
             {loading ? (
               <span>Registrando y enviando correos...</span>
+            ) : isBlocked ? (
+              <span>Presupuesto Agotado 🔒</span>
             ) : (
               <>
                 <Plus size={18} />

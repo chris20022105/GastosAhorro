@@ -190,7 +190,7 @@ export default function App() {
 
       {/* Contenido Principal */}
       {activeTab === 'dashboard' ? (
-        <Dashboard stats={stats} user={user} />
+        <Dashboard stats={stats} user={user} onUpdateBudget={fetchData} token={token} />
       ) : (
         <ExpenseList 
           expenses={expenses} 
@@ -200,7 +200,11 @@ export default function App() {
       )}
 
       {/* Botón flotante para registrar gasto (FAB) */}
-      <button className="fab" onClick={() => setIsAddOpen(true)} type="button">
+      <button 
+        className={`fab ${stats.budget && stats.totalSpent >= stats.budget.budget_limit_pen ? 'fab-blocked' : ''}`} 
+        onClick={() => setIsAddOpen(true)} 
+        type="button"
+      >
         <Plus size={18} />
         <span>Nuevo Gasto</span>
       </button>
@@ -212,6 +216,7 @@ export default function App() {
         onExpenseAdded={handleExpenseAdded}
         token={token}
         user={user}
+        stats={stats}
       />
     </div>
   );
