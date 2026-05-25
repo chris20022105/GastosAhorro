@@ -963,6 +963,10 @@ app.delete('/api/savings/deposits/:id', authenticateToken, async (req, res) => {
       }
     }
 
+    res.json({ message: 'Aporte de ahorro eliminado con éxito.' });
+  } catch (err) {
+    console.error('Error al eliminar aporte de ahorro:', err);
+    res.status(500).json({ error: 'No se pudo eliminar el aporte de ahorro.' });
   }
 });
 
