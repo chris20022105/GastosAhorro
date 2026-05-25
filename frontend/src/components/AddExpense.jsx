@@ -34,8 +34,6 @@ export default function AddExpense({ isOpen, onClose, onExpenseAdded, token, use
     { name: 'Entretenimiento', emoji: '🎬' },
     { name: 'Tarjeta BCP', emoji: '💳', shortName: 'TC BCP' },
     { name: 'Tarjeta Ripley', emoji: '🛍️', shortName: 'TC Ripley' },
-    { name: 'Pago Tarjeta BCP', emoji: '💸', shortName: 'Pago BCP' },
-    { name: 'Pago Tarjeta Ripley', emoji: '💸', shortName: 'Pago Ripley' },
     { name: 'Otros', emoji: '📦' }
   ];
 

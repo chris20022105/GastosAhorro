@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { LogOut, Plus, PieChart, List, RefreshCw, Wallet, PiggyBank } from 'lucide-react';
+import { LogOut, Plus, PieChart, List, RefreshCw, Wallet, PiggyBank, CreditCard } from 'lucide-react';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import ExpenseList from './components/ExpenseList';
 import AddExpense from './components/AddExpense';
 import SavingsBox from './components/SavingsBox';
+import CreditCards from './components/CreditCards';
 
 
 export default function App() {
@@ -204,8 +205,18 @@ export default function App() {
             user={user} 
           />
         )
-      ) : (
+      ) : mainTab === 'savings' ? (
         <SavingsBox token={token} user={user} showToast={showToast} />
+      ) : (
+        <CreditCards
+          stats={stats}
+          user={user}
+          onUpdateBudget={fetchData}
+          token={token}
+          expenses={expenses}
+          onDeleteExpense={handleDeleteExpense}
+          showToast={showToast}
+        />
       )}
 
       {/* Botón flotante para registrar gasto (FAB) */}
@@ -249,6 +260,14 @@ export default function App() {
         >
           <PiggyBank size={20} />
           <span>Caja Ahorro</span>
+        </button>
+        <button 
+          className={`tab-item ${mainTab === 'cards' ? 'active' : ''}`}
+          onClick={() => setMainTab('cards')}
+          type="button"
+        >
+          <CreditCard size={20} />
+          <span>Tarjetas</span>
         </button>
       </nav>
     </div>

@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Wallet, Sparkles, Heart, Sliders, X, Lock, AlertTriangle, CalendarDays, Plus } from 'lucide-react';
+import { Wallet, Sparkles, Heart, Sliders, X, Lock, AlertTriangle, CalendarDays } from 'lucide-react';
 import useScrollLock from '../hooks/useScrollLock';
 
 export default function Dashboard({ stats, user, onUpdateBudget, token }) {
-  const { totalSpent = 0, partnerSpent = {}, categorySpent = {}, budget, spentBcp = 0, spentRipley = 0 } = stats;
+  const { totalSpent = 0, partnerSpent = {}, categorySpent = {}, budget } = stats;
 
   const budgetLimit = budget ? parseFloat(budget.budget_limit_pen) : 3000;
   const incomeChris = budget ? parseFloat(budget.income_chris_pen) : 2809.90;
@@ -21,8 +21,6 @@ export default function Dashboard({ stats, user, onUpdateBudget, token }) {
   const isExceeded = totalSpent >= budgetLimit;
   const isNearLimit = totalSpent >= budgetLimit * 0.9 && totalSpent < budgetLimit;
 
-  const bcpPercent = Math.min((spentBcp / bcpLimit) * 100, 100);
-  const ripleyPercent = Math.min((spentRipley / ripleyLimit) * 100, 100);
 
   // Cálculos de Micro-Límites (Presupuesto Diario/Semanal Dinámico)
   const today = new Date();
@@ -108,17 +106,8 @@ export default function Dashboard({ stats, user, onUpdateBudget, token }) {
   const [valChris, setValChris] = useState('');
   const [valSolansh, setValSolansh] = useState('');
   const [valLimit, setValLimit] = useState('');
-  const [valLimitBcp, setValLimitBcp] = useState('');
-  const [valLimitRipley, setValLimitRipley] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
-  // Estados para modal de Pago Rápido de Tarjeta
-  const [isPayOpen, setIsPayOpen] = useState(false);
-  const [payCard, setPayCard] = useState(''); // 'BCP' o 'Ripley'
-  const [payAmount, setPayAmount] = useState('');
-  const [payLoading, setPayLoading] = useState(false);
-  const [payError, setPayError] = useState('');
 
   // Inicializar inputs cuando se abre el modal
   useEffect(() => {
@@ -126,23 +115,12 @@ export default function Dashboard({ stats, user, onUpdateBudget, token }) {
       setValChris(incomeChris.toString());
       setValSolansh(incomeSolansh.toString());
       setValLimit(budgetLimit.toString());
-      setValLimitBcp(bcpLimit.toString());
-      setValLimitRipley(ripleyLimit.toString());
       setError('');
     }
-  }, [isModalOpen, incomeChris, incomeSolansh, budgetLimit, bcpLimit, ripleyLimit]);
-
-  // Inicializar modal de pago rápido
-  useEffect(() => {
-    if (isPayOpen) {
-      const defaultAmount = payCard === 'BCP' ? spentBcp : spentRipley;
-      setPayAmount(defaultAmount.toFixed(2));
-      setPayError('');
-    }
-  }, [isPayOpen, payCard, spentBcp, spentRipley]);
+  }, [isModalOpen, incomeChris, incomeSolansh, budgetLimit]);
 
   // Bloquear scroll del fondo cuando los modales están abiertos
-  useScrollLock(isModalOpen || isPayOpen);
+  useScrollLock(isModalOpen);
 
   const numChris = parseFloat(valChris) || 0;
   const numSolansh = parseFloat(valSolansh) || 0;
@@ -185,48 +163,7 @@ export default function Dashboard({ stats, user, onUpdateBudget, token }) {
     }
   };
 
-  const handleQuickPay = async (e) => {
-    e.preventDefault();
-    setPayLoading(true);
-    setPayError('');
 
-    const parsedAmount = parseFloat(payAmount);
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      setPayError('Por favor, ingresa un monto válido mayor a 0.');
-      setPayLoading(false);
-      return;
-    }
-
-    try {
-      const response = await fetch('/api/expenses', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          amount: parsedAmount,
-          description: `Pago de Tarjeta ${payCard} (Autogestionado)`,
-          category: `Pago Tarjeta ${payCard}`,
-          date: new Date().toISOString().split('T')[0]
-        })
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Error al procesar el pago');
-      }
-
-      setIsPayOpen(false);
-      if (onUpdateBudget) {
-        onUpdateBudget();
-      }
-    } catch (err) {
-      setPayError(err.message);
-    } finally {
-      setPayLoading(false);
-    }
-  };
 
   // Emojis de categoría
   const categoryEmojis = {
@@ -457,126 +394,7 @@ export default function Dashboard({ stats, user, onUpdateBudget, token }) {
         </div>
       </div>
 
-      {/* Líneas de Crédito Activas */}
-      <div 
-        className="expenses-card" 
-        style={{ 
-          marginTop: '-4px', 
-          display: 'flex', 
-          flexDirection: 'column', 
-          gap: '16px',
-          border: '1px solid var(--ios-separator)',
-          boxShadow: 'var(--shadow-sm)'
-        }}
-      >
-        <div>
-          <span style={{ fontSize: '11px', fontWeight: '600', color: 'var(--ios-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-            Líneas de Crédito Activas
-          </span>
-        </div>
 
-        {/* Tarjeta BCP */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '18px' }}>💳</span>
-              <span style={{ fontSize: '14px', fontWeight: '700', color: '#005ca9' }}>Tarjeta BCP</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--ios-text)' }}>
-                S/. {spentBcp.toFixed(2)} <span style={{ fontSize: '11px', color: 'var(--ios-text-secondary)', fontWeight: '500' }}>de S/. {bcpLimit.toFixed(0)}</span>
-              </span>
-              {spentBcp > 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPayCard('BCP');
-                    setIsPayOpen(true);
-                  }}
-                  style={{
-                    backgroundColor: '#e1f0fa',
-                    color: '#005ca9',
-                    border: 'none',
-                    borderRadius: '8px',
-                    padding: '4px 10px',
-                    fontSize: '11px',
-                    fontWeight: '700',
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '3px',
-                    boxShadow: 'var(--shadow-sm)'
-                  }}
-                >
-                  Pagar
-                </button>
-              )}
-            </div>
-          </div>
-          <div style={{ backgroundColor: '#7676800f', height: '8px', borderRadius: '4px', overflow: 'hidden' }}>
-            <div 
-              style={{ 
-                backgroundColor: '#005ca9', // Color Azul BCP
-                height: '100%', 
-                width: `${bcpPercent}%`,
-                borderRadius: '4px',
-                transition: 'width 0.8s cubic-bezier(0.16, 1, 0.3, 1)'
-              }}
-            ></div>
-          </div>
-        </div>
-
-        {/* Tarjeta Ripley */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', borderTop: '1px solid var(--ios-separator)', paddingTop: '12px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '18px' }}>🛍️</span>
-              <span style={{ fontSize: '14px', fontWeight: '700', color: '#ec6707' }}>Tarjeta Ripley</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--ios-text)' }}>
-                S/. {spentRipley.toFixed(2)} <span style={{ fontSize: '11px', color: 'var(--ios-text-secondary)', fontWeight: '500' }}>de S/. {ripleyLimit.toFixed(0)}</span>
-              </span>
-              {spentRipley > 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPayCard('Ripley');
-                    setIsPayOpen(true);
-                  }}
-                  style={{
-                    backgroundColor: '#ffebe0',
-                    color: '#ec6707',
-                    border: 'none',
-                    borderRadius: '8px',
-                    padding: '4px 10px',
-                    fontSize: '11px',
-                    fontWeight: '700',
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '3px',
-                    boxShadow: 'var(--shadow-sm)'
-                  }}
-                >
-                  Pagar
-                </button>
-              )}
-            </div>
-          </div>
-          <div style={{ backgroundColor: '#7676800f', height: '8px', borderRadius: '4px', overflow: 'hidden' }}>
-            <div 
-              style={{ 
-                backgroundColor: '#ec6707', // Color Naranja Ripley
-                height: '100%', 
-                width: `${ripleyPercent}%`,
-                borderRadius: '4px',
-                transition: 'width 0.8s cubic-bezier(0.16, 1, 0.3, 1)'
-              }}
-            ></div>
-          </div>
-        </div>
-      </div>
 
       {/* Comparativa de Pareja */}
       <div className="section-title" style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -763,35 +581,7 @@ export default function Dashboard({ stats, user, onUpdateBudget, token }) {
                 />
               </div>
 
-              {/* Límite Tarjeta BCP */}
-              <div className="form-group" style={{ marginBottom: '14px' }}>
-                <label className="form-label">Límite Tarjeta BCP (S/.)</label>
-                <input 
-                  type="number" 
-                  step="0.01" 
-                  className="form-input" 
-                  value={valLimitBcp} 
-                  onChange={(e) => setValLimitBcp(e.target.value)} 
-                  disabled={loading}
-                  placeholder="1000.00"
-                  required
-                />
-              </div>
 
-              {/* Límite Tarjeta Ripley */}
-              <div className="form-group" style={{ marginBottom: '14px' }}>
-                <label className="form-label">Límite Tarjeta Ripley (S/.)</label>
-                <input 
-                  type="number" 
-                  step="0.01" 
-                  className="form-input" 
-                  value={valLimitRipley} 
-                  onChange={(e) => setValLimitRipley(e.target.value)} 
-                  disabled={loading}
-                  placeholder="500.00"
-                  required
-                />
-              </div>
 
               {/* Panel de sugerencias */}
               <div style={{ marginBottom: '24px' }}>
@@ -839,89 +629,7 @@ export default function Dashboard({ stats, user, onUpdateBudget, token }) {
         document.body
       )}
 
-      {/* MODAL DE PAGO RÁPIDO DE TARJETA (Bottom Sheet) */}
-      {createPortal(
-        <>
-          <div 
-            className={`overlay ${isPayOpen ? 'open' : ''}`} 
-            onClick={() => !payLoading && setIsPayOpen(false)}
-            onTouchMove={(e) => e.preventDefault()}
-          ></div>
 
-          <div className={`bottom-sheet ${isPayOpen ? 'open' : ''}`}>
-            <div className="sheet-header" onTouchMove={(e) => e.preventDefault()}>
-              <span className="sheet-title">Abonar a Tarjeta {payCard}</span>
-              <button className="btn-close" onClick={() => !payLoading && setIsPayOpen(false)} type="button" disabled={payLoading}>
-                <X size={18} />
-              </button>
-            </div>
-
-            {payError && (
-              <div 
-                style={{
-                  backgroundColor: 'var(--color-danger-light)',
-                  color: 'var(--color-danger)',
-                  padding: '10px 14px',
-                  borderRadius: '12px',
-                  fontSize: '13px',
-                  fontWeight: '600',
-                  marginBottom: '16px'
-                }}
-              >
-                {payError}
-              </div>
-            )}
-
-            <form onSubmit={handleQuickPay}>
-              <div className="form-group" style={{ marginBottom: '16px' }}>
-                <label className="form-label">Monto a Pagar (S/.)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  pattern="[0-9]*"
-                  inputMode="decimal"
-                  className="form-input"
-                  style={{ 
-                    fontSize: '28px', 
-                    fontWeight: '700', 
-                    textAlign: 'center', 
-                    letterSpacing: '-0.5px',
-                    color: payCard === 'BCP' ? '#005ca9' : '#ec6707',
-                    padding: '16px'
-                  }}
-                  placeholder="0.00"
-                  value={payAmount}
-                  onChange={(e) => setPayAmount(e.target.value)}
-                  required
-                  disabled={payLoading}
-                  autoFocus={isPayOpen}
-                />
-              </div>
-
-              <div style={{ fontSize: '12px', color: 'var(--ios-text-secondary)', textAlign: 'center', marginBottom: '20px', fontWeight: '500' }}>
-                Esto se registrará como un gasto de efectivo y reducirá la deuda de la tarjeta.
-              </div>
-
-              <button 
-                type="submit" 
-                className="btn-primary" 
-                disabled={payLoading} 
-                style={{ backgroundColor: payCard === 'BCP' ? '#005ca9' : '#ec6707' }}
-              >
-                {payLoading ? (
-                  <span>Registrando pago...</span>
-                ) : (
-                  <>
-                    <Plus size={18} />
-                    <span>Confirmar Pago (S/. {parseFloat(payAmount || 0).toFixed(2)})</span>
-                  </>
-                )}
-              </button>
-            </form>
-          </div>
-        </>,
-        document.body
-      )}
     </div>
   );
 }
