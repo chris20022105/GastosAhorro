@@ -38,7 +38,7 @@ if (!supabaseUrl || !supabaseKey || supabaseUrl.includes('tu-proyecto')) {
 const supabase = createClient(supabaseUrl || 'https://placeholder.supabase.co', supabaseKey || 'placeholder');
 
 // Importar servicio de correo
-const { sendExpenseNotification, sendBudgetExceededNotification, sendSavingsNotification } = require('./services/emailService');
+const { sendExpenseNotification, sendBudgetExceededNotification, sendSavingsNotification, sendLoanReminderNotification } = require('./services/emailService');
 
 // Helpers de zona horaria para Perú (GMT-5)
 const getPeruMonth = () => {
@@ -963,12 +963,245 @@ app.delete('/api/savings/deposits/:id', authenticateToken, async (req, res) => {
       }
     }
 
-    res.json({ message: 'Aporte de ahorro y gasto asociado eliminados con éxito.' });
-  } catch (err) {
-    console.error('Error al eliminar aporte de ahorro:', err);
-    res.status(500).json({ error: 'No se pudo eliminar el aporte de ahorro.' });
   }
 });
+
+// ============================================================================
+// RUTAS DE PRÉSTAMOS (Cobros)
+// ============================================================================
+
+// Obtener todos los préstamos y sus abonos
+app.get('/api/loans', authenticateToken, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('loans')
+      .select('*, loan_payments(*)')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    console.error('Error al obtener préstamos:', err);
+    res.status(500).json({ error: 'No se pudieron obtener los préstamos.' });
+  }
+});
+
+// Registrar nuevo préstamo
+app.post('/api/loans', authenticateToken, async (req, res) => {
+  const { borrower_name, amount, description, loan_date, due_date } = req.body;
+  const parsedAmount = parseFloat(amount);
+
+  if (!borrower_name || isNaN(parsedAmount) || parsedAmount <= 0 || !due_date) {
+    return res.status(400).json({ error: 'Todos los campos son requeridos y el monto debe ser mayor a 0.' });
+  }
+
+  try {
+    const newLoan = {
+      borrower_name: borrower_name.trim(),
+      amount: parsedAmount,
+      remaining_debt: parsedAmount,
+      description: (description || '').trim(),
+      loan_date: loan_date || getPeruDate(),
+      due_date: due_date,
+      status: 'Pendiente',
+      user_id: req.user.id,
+      spender_name: req.user.name,
+      email_sent_due: false
+    };
+
+    const { data, error } = await supabase
+      .from('loans')
+      .insert([newLoan])
+      .select();
+
+    if (error) throw error;
+    res.status(201).json(data[0]);
+  } catch (err) {
+    console.error('Error al crear préstamo:', err);
+    res.status(500).json({ error: 'No se pudo registrar el préstamo.' });
+  }
+});
+
+// Extender la fecha de vencimiento
+app.put('/api/loans/:id/extend', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const { due_date } = req.body;
+
+  if (!due_date) {
+    return res.status(400).json({ error: 'La fecha de vencimiento es requerida.' });
+  }
+
+  try {
+    const { data: currentLoan } = await supabase
+      .from('loans')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (!currentLoan) {
+      return res.status(404).json({ error: 'El préstamo no existe.' });
+    }
+
+    const updates = {
+      due_date: due_date,
+      email_sent_due: false // Resetear flag por si la nueva fecha coincide con hoy
+    };
+
+    const { data, error } = await supabase
+      .from('loans')
+      .update(updates)
+      .eq('id', id)
+      .select();
+
+    if (error) throw error;
+    res.json(data[0]);
+  } catch (err) {
+    console.error('Error al extender préstamo:', err);
+    res.status(500).json({ error: 'No se pudo actualizar la fecha del préstamo.' });
+  }
+});
+
+// Registrar abono o pago completo
+app.post('/api/loans/:id/pay', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const { amount } = req.body;
+  const paymentAmount = parseFloat(amount);
+
+  if (isNaN(paymentAmount) || paymentAmount <= 0) {
+    return res.status(400).json({ error: 'El monto del abono debe ser mayor a 0.' });
+  }
+
+  try {
+    // 1. Obtener detalles del préstamo
+    const { data: loan, error: findError } = await supabase
+      .from('loans')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (findError || !loan) {
+      return res.status(404).json({ error: 'El préstamo no existe.' });
+    }
+
+    if (loan.status === 'Pagado') {
+      return res.status(400).json({ error: 'El préstamo ya ha sido pagado.' });
+    }
+
+    // 2. Calcular nueva deuda
+    const newRemainingDebt = Math.max(0, parseFloat(loan.remaining_debt) - paymentAmount);
+    const newStatus = newRemainingDebt <= 0 ? 'Pagado' : 'Pago Parcial';
+
+    // 3. Crear registro de pago
+    const newPayment = {
+      loan_id: id,
+      amount: paymentAmount,
+      payment_date: getPeruDate(),
+      spender_name: req.user.name
+    };
+
+    const { error: paymentError } = await supabase
+      .from('loan_payments')
+      .insert([newPayment]);
+
+    if (paymentError) throw paymentError;
+
+    // 4. Actualizar préstamo
+    const { data: updatedLoan, error: updateError } = await supabase
+      .from('loans')
+      .update({
+        remaining_debt: newRemainingDebt,
+        status: newStatus
+      })
+      .eq('id', id)
+      .select();
+
+    if (updateError) throw updateError;
+    res.json({ loan: updatedLoan[0], payment: newPayment });
+  } catch (err) {
+    console.error('Error al registrar pago de préstamo:', err);
+    res.status(500).json({ error: 'No se pudo registrar el pago del préstamo.' });
+  }
+});
+
+// Eliminar un préstamo
+app.delete('/api/loans/:id', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const { error } = await supabase
+      .from('loans')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    res.json({ message: 'Préstamo eliminado con éxito.' });
+  } catch (err) {
+    console.error('Error al eliminar préstamo:', err);
+    res.status(500).json({ error: 'No se pudo eliminar el préstamo.' });
+  }
+});
+
+// Obtener préstamos vencidos o por vencer hoy
+app.get('/api/loans/due-alerts', authenticateToken, async (req, res) => {
+  try {
+    const todayStr = getPeruDate();
+    const { data, error } = await supabase
+      .from('loans')
+      .select('*')
+      .neq('status', 'Pagado')
+      .lte('due_date', todayStr)
+      .order('due_date', { ascending: true });
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    console.error('Error al obtener alertas de cobro:', err);
+    res.status(500).json({ error: 'No se pudieron obtener las alertas de cobro.' });
+  }
+});
+
+// Proceso en segundo plano para enviar recordatorios por correo
+const checkAndSendLoanReminders = async () => {
+  console.log('[Scheduler] Buscando préstamos vencidos o por vencer hoy para alertas...');
+  try {
+    const todayStr = getPeruDate();
+    
+    // Obtener préstamos no pagados con due_date hoy o vencido, y email_sent_due = false
+    const { data: loans, error } = await supabase
+      .from('loans')
+      .select('*')
+      .neq('status', 'Pagado')
+      .lte('due_date', todayStr)
+      .eq('email_sent_due', false);
+
+    if (error) throw error;
+
+    if (loans && loans.length > 0) {
+      console.log(`[Scheduler] Encontrados ${loans.length} préstamos pendientes de recordatorio.`);
+      for (const loan of loans) {
+        const emailResult = await sendLoanReminderNotification(loan);
+        if (emailResult.success) {
+          // Marcar como enviado
+          await supabase
+            .from('loans')
+            .update({ email_sent_due: true })
+            .eq('id', loan.id);
+          console.log(`[Scheduler] Correo de recordatorio enviado para préstamo ID: ${loan.id}`);
+        } else {
+          console.error(`[Scheduler] Error al enviar correo para préstamo ID ${loan.id}:`, emailResult.error);
+        }
+      }
+    } else {
+      console.log('[Scheduler] No hay nuevos recordatorios por enviar hoy.');
+    }
+  } catch (err) {
+    console.error('[Scheduler] Error en checkAndSendLoanReminders:', err);
+  }
+};
+
+// Ejecutar rutina al iniciar y luego cada 12 horas
+setTimeout(checkAndSendLoanReminders, 10000);
+setInterval(checkAndSendLoanReminders, 12 * 60 * 60 * 1000);
 
 // ============================================================================
 // SERVICIO DE ARCHIVOS ESTÁTICOS (PRODUCCIÓN)

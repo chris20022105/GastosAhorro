@@ -308,7 +308,7 @@ export default function CreditLoans({ token, user, onUpdateBudget, showToast }) 
     // 2. Filtrar por búsqueda
     const matchesSearch = 
       loan.borrower_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      loan.description.toLowerCase().includes(searchQuery.toLowerCase());
+      (loan.description || '').toLowerCase().includes(searchQuery.toLowerCase());
 
     return matchesStatus && matchesSearch;
   });
@@ -430,9 +430,11 @@ export default function CreditLoans({ token, user, onUpdateBudget, showToast }) 
                         <div style={{ fontWeight: '700', color: 'var(--ios-text)', fontSize: '15px' }}>
                           {loan.borrower_name}
                         </div>
-                        <div style={{ fontSize: '12px', color: 'var(--ios-text-secondary)', marginTop: '2px' }}>
-                          {loan.description || 'Sin notas descriptivas'}
-                        </div>
+                        {loan.description && (
+                          <div style={{ fontSize: '12px', color: 'var(--ios-text-secondary)', marginTop: '2px' }}>
+                            {loan.description}
+                          </div>
+                        )}
                         <div style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
                           <span style={{ color: 'var(--ios-text-secondary)', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
                             <User size={10} /> {loan.spender_name.split(' ')[0]}
@@ -638,20 +640,6 @@ export default function CreditLoans({ token, user, onUpdateBudget, showToast }) 
                   onChange={(e) => setBorrowerName(e.target.value)}
                   required
                   maxLength={50}
-                  disabled={addLoading}
-                />
-              </div>
-
-              {/* Detalle */}
-              <div className="form-group" style={{ marginBottom: '14px' }}>
-                <label className="form-label">Detalle o Concepto</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="Ej. Almuerzo compartido, viaje..."
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  maxLength={100}
                   disabled={addLoading}
                 />
               </div>

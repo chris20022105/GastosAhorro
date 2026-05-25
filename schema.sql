@@ -61,6 +61,35 @@ CREATE TABLE IF NOT EXISTS savings_deposits (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Tabla de Préstamos
+CREATE TABLE IF NOT EXISTS loans (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    borrower_name TEXT NOT NULL,
+    amount NUMERIC(10, 2) NOT NULL CHECK (amount > 0),
+    remaining_debt NUMERIC(10, 2) NOT NULL CHECK (remaining_debt >= 0),
+    description TEXT NOT NULL,
+    loan_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    due_date DATE NOT NULL,
+    status TEXT NOT NULL DEFAULT 'Pendiente', -- 'Pendiente', 'Pago Parcial', 'Pagado'
+    user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    spender_name TEXT NOT NULL,
+    email_sent_due BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Tabla de Pagos de Préstamos
+CREATE TABLE IF NOT EXISTS loan_payments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    loan_id UUID REFERENCES loans(id) ON DELETE CASCADE,
+    amount NUMERIC(10, 2) NOT NULL CHECK (amount > 0),
+    payment_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    spender_name TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Índice para consultas rápidas de préstamos por fecha de vencimiento
+CREATE INDEX IF NOT EXISTS idx_loans_due_date ON loans(due_date DESC);
+
 -- Índice para consultas rápidas de ahorros por fecha
 CREATE INDEX IF NOT EXISTS idx_savings_deposits_date ON savings_deposits(date DESC);
 
