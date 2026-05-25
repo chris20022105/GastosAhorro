@@ -199,20 +199,63 @@ app.post('/api/expenses', authenticateToken, async (req, res) => {
     // 2. Calcular gastos ya registrados de este mes
     const { data: monthExpenses, error: expError } = await supabase
       .from('expenses')
-      .select('amount')
+      .select('amount, category')
       .gte('date', `${targetMonth}-01`)
       .lte('date', `${targetMonth}-31`);
 
     if (expError) throw expError;
 
-    const currentTotal = (monthExpenses || []).reduce((sum, e) => sum + parseFloat(e.amount), 0);
-    const budgetLimit = parseFloat(budget.budget_limit_pen);
+    let cashTotal = 0;
+    let bcpPurchases = 0;
+    let bcpPayments = 0;
+    let ripleyPurchases = 0;
+    let ripleyPayments = 0;
 
-    // 3. Si el presupuesto ya está agotado o superado, bloquear la transacción
-    if (currentTotal >= budgetLimit) {
-      return res.status(400).json({
-        error: `Presupuesto mensual agotado. Se ha consumido S/. ${currentTotal.toFixed(2)} de S/. ${budgetLimit.toFixed(2)}. No se permite registrar más gastos.`
-      });
+    (monthExpenses || []).forEach(e => {
+      const amt = parseFloat(e.amount);
+      if (e.category === 'Tarjeta BCP') {
+        bcpPurchases += amt;
+      } else if (e.category === 'Tarjeta Ripley') {
+        ripleyPurchases += amt;
+      } else if (e.category === 'Pago Tarjeta BCP') {
+        bcpPayments += amt;
+        cashTotal += amt;
+      } else if (e.category === 'Pago Tarjeta Ripley') {
+        ripleyPayments += amt;
+        cashTotal += amt;
+      } else {
+        cashTotal += amt;
+      }
+    });
+
+    const budgetLimit = parseFloat(budget.budget_limit_pen);
+    const isCardPurchase = ['Tarjeta BCP', 'Tarjeta Ripley'].includes(category.trim());
+
+    // 3. Validar límites correspondientes
+    if (isCardPurchase) {
+      if (category.trim() === 'Tarjeta BCP') {
+        const bcpLimit = parseFloat(budget.credit_limit_bcp_pen) || 1000.00;
+        const currentBcpDebt = Math.max(0, bcpPurchases - bcpPayments);
+        if (currentBcpDebt + parsedAmount > bcpLimit) {
+          return res.status(400).json({
+            error: `Límite de tarjeta BCP excedido. Consumo acumulado: S/. ${currentBcpDebt.toFixed(2)} de S/. ${bcpLimit.toFixed(2)}. No se permite registrar esta compra de S/. ${parsedAmount.toFixed(2)}.`
+          });
+        }
+      } else if (category.trim() === 'Tarjeta Ripley') {
+        const ripleyLimit = parseFloat(budget.credit_limit_ripley_pen) || 500.00;
+        const currentRipleyDebt = Math.max(0, ripleyPurchases - ripleyPayments);
+        if (currentRipleyDebt + parsedAmount > ripleyLimit) {
+          return res.status(400).json({
+            error: `Límite de tarjeta Ripley excedido. Consumo acumulado: S/. ${currentRipleyDebt.toFixed(2)} de S/. ${ripleyLimit.toFixed(2)}. No se permite registrar esta compra de S/. ${parsedAmount.toFixed(2)}.`
+          });
+        }
+      }
+    } else {
+      if (cashTotal >= budgetLimit) {
+        return res.status(400).json({
+          error: `Presupuesto mensual agotado. Se ha consumido S/. ${cashTotal.toFixed(2)} de S/. ${budgetLimit.toFixed(2)}. No se permite registrar más gastos en efectivo.`
+        });
+      }
     }
 
     const newExpense = {
@@ -234,7 +277,6 @@ app.post('/api/expenses', authenticateToken, async (req, res) => {
     if (error) throw error;
 
     const createdExpense = insertedData[0];
-    const newTotal = currentTotal + parsedAmount;
 
     // Enviar notificación de correo en segundo plano
     sendExpenseNotification(createdExpense).then(result => {
@@ -247,8 +289,8 @@ app.post('/api/expenses', authenticateToken, async (req, res) => {
       console.error('Error no controlado en sendExpenseNotification:', err);
     });
 
-    // Enviar notificación de presupuesto completado (100%) si cruza el límite
-    if (newTotal >= budgetLimit && !budget.email_sent_100) {
+    // Enviar notificación de presupuesto completado (100%) si cruza el límite (solo efectivo)
+    if (!isCardPurchase && (cashTotal + parsedAmount) >= budgetLimit && !budget.email_sent_100) {
       // Marcar de inmediato en BD para evitar envíos duplicados
       supabase
         .from('monthly_budgets')
@@ -361,6 +403,8 @@ app.get('/api/budget/:yearMonth', authenticateToken, async (req, res) => {
         income_chris_pen: 2809.90,
         income_solansh_pen: 1550.00,
         budget_limit_pen: 3000.00,
+        credit_limit_bcp_pen: 1000.00,
+        credit_limit_ripley_pen: 500.00,
         email_sent_100: false
       };
 
@@ -383,7 +427,7 @@ app.get('/api/budget/:yearMonth', authenticateToken, async (req, res) => {
 // Actualizar presupuesto mensual
 app.put('/api/budget/:yearMonth', authenticateToken, async (req, res) => {
   const { yearMonth } = req.params;
-  const { income_chris_pen, income_solansh_pen, budget_limit_pen } = req.body;
+  const { income_chris_pen, income_solansh_pen, budget_limit_pen, credit_limit_bcp_pen, credit_limit_ripley_pen } = req.body;
 
   if (!/^\d{4}-\d{2}$/.test(yearMonth)) {
     return res.status(400).json({ error: 'Formato de mes inválido. Debe ser YYYY-MM.' });
@@ -392,8 +436,16 @@ app.put('/api/budget/:yearMonth', authenticateToken, async (req, res) => {
   const chrisIncome = parseFloat(income_chris_pen);
   const solanshIncome = parseFloat(income_solansh_pen);
   const limit = parseFloat(budget_limit_pen);
+  const bcpLimit = credit_limit_bcp_pen !== undefined ? parseFloat(credit_limit_bcp_pen) : 1000.00;
+  const ripleyLimit = credit_limit_ripley_pen !== undefined ? parseFloat(credit_limit_ripley_pen) : 500.00;
 
-  if (isNaN(chrisIncome) || chrisIncome < 0 || isNaN(solanshIncome) || solanshIncome < 0 || isNaN(limit) || limit < 0) {
+  if (
+    isNaN(chrisIncome) || chrisIncome < 0 || 
+    isNaN(solanshIncome) || solanshIncome < 0 || 
+    isNaN(limit) || limit < 0 ||
+    isNaN(bcpLimit) || bcpLimit < 0 ||
+    isNaN(ripleyLimit) || ripleyLimit < 0
+  ) {
     return res.status(400).json({ error: 'Ingresos y límites deben ser valores numéricos mayores o iguales a cero.' });
   }
 
@@ -406,17 +458,25 @@ app.put('/api/budget/:yearMonth', authenticateToken, async (req, res) => {
 
     const { data: expenses } = await supabase
       .from('expenses')
-      .select('amount')
+      .select('amount, category')
       .gte('date', `${yearMonth}-01`)
       .lte('date', `${yearMonth}-31`);
 
-    const totalSpent = (expenses || []).reduce((sum, exp) => sum + parseFloat(exp.amount), 0);
-    const shouldResetEmail = totalSpent < limit;
+    let cashTotal = 0;
+    (expenses || []).forEach(e => {
+      if (!['Tarjeta BCP', 'Tarjeta Ripley'].includes(e.category)) {
+        cashTotal += parseFloat(e.amount);
+      }
+    });
+
+    const shouldResetEmail = cashTotal < limit;
 
     const updates = {
       income_chris_pen: chrisIncome,
       income_solansh_pen: solanshIncome,
       budget_limit_pen: limit,
+      credit_limit_bcp_pen: bcpLimit,
+      credit_limit_ripley_pen: ripleyLimit,
       email_sent_100: currentBudget ? (shouldResetEmail ? false : currentBudget.email_sent_100) : false
     };
 
@@ -455,6 +515,8 @@ app.get('/api/stats', authenticateToken, async (req, res) => {
         income_chris_pen: 2809.90,
         income_solansh_pen: 1550.00,
         budget_limit_pen: 3000.00,
+        credit_limit_bcp_pen: 1000.00,
+        credit_limit_ripley_pen: 500.00,
         email_sent_100: false
       };
 
@@ -478,6 +540,10 @@ app.get('/api/stats', authenticateToken, async (req, res) => {
 
     // Calcular estadísticas
     let totalSpent = 0;
+    let bcpPurchases = 0;
+    let bcpPayments = 0;
+    let ripleyPurchases = 0;
+    let ripleyPayments = 0;
     const partnerSpent = {};
     const categorySpent = {};
 
@@ -495,7 +561,20 @@ app.get('/api/stats', authenticateToken, async (req, res) => {
 
     (expenses || []).forEach(exp => {
       const amt = parseFloat(exp.amount);
-      totalSpent += amt;
+      
+      if (exp.category === 'Tarjeta BCP') {
+        bcpPurchases += amt;
+      } else if (exp.category === 'Tarjeta Ripley') {
+        ripleyPurchases += amt;
+      } else if (exp.category === 'Pago Tarjeta BCP') {
+        bcpPayments += amt;
+        totalSpent += amt; // El pago a la tarjeta sale del efectivo
+      } else if (exp.category === 'Pago Tarjeta Ripley') {
+        ripleyPayments += amt;
+        totalSpent += amt; // El pago a la tarjeta sale del efectivo
+      } else {
+        totalSpent += amt; // Gastos de efectivo normales
+      }
 
       // Por pareja (usar spender_name)
       partnerSpent[exp.spender_name] = (partnerSpent[exp.spender_name] || 0) + amt;
@@ -504,12 +583,17 @@ app.get('/api/stats', authenticateToken, async (req, res) => {
       categorySpent[exp.category] = (categorySpent[exp.category] || 0) + amt;
     });
 
+    const spentBcp = Math.max(0, bcpPurchases - bcpPayments);
+    const spentRipley = Math.max(0, ripleyPurchases - ripleyPayments);
+
     res.json({
       month,
       totalSpent,
       partnerSpent,
       categorySpent,
-      budget
+      budget,
+      spentBcp,
+      spentRipley
     });
   } catch (err) {
     console.error('Error al calcular estadísticas:', err);
@@ -662,6 +746,8 @@ app.post('/api/savings/deposits', authenticateToken, async (req, res) => {
           income_chris_pen: 2809.90,
           income_solansh_pen: 1550.00,
           budget_limit_pen: 3000.00,
+          credit_limit_bcp_pen: 1000.00,
+          credit_limit_ripley_pen: 500.00,
           email_sent_100: false
         };
 
@@ -677,21 +763,26 @@ app.post('/api/savings/deposits', authenticateToken, async (req, res) => {
       budget = budgetData;
       budgetLimit = parseFloat(budget.budget_limit_pen);
 
-      // 2. Calcular gastos ya registrados de este mes
+      // 2. Calcular gastos ya registrados de este mes (solo efectivo)
       const { data: monthExpenses, error: expError } = await supabase
         .from('expenses')
-        .select('amount')
+        .select('amount, category')
         .gte('date', `${targetMonth}-01`)
         .lte('date', `${targetMonth}-31`);
 
       if (expError) throw expError;
 
-      currentTotal = (monthExpenses || []).reduce((sum, e) => sum + parseFloat(e.amount), 0);
+      let cashTotal = 0;
+      (monthExpenses || []).forEach(e => {
+        if (!['Tarjeta BCP', 'Tarjeta Ripley'].includes(e.category)) {
+          cashTotal += parseFloat(e.amount);
+        }
+      });
 
       // 3. Bloquear la transacción si el presupuesto mensual ya está agotado
-      if (currentTotal >= budgetLimit) {
+      if (cashTotal >= budgetLimit) {
         return res.status(400).json({
-          error: `Presupuesto mensual agotado. Se ha consumido S/. ${currentTotal.toFixed(2)} de S/. ${budgetLimit.toFixed(2)}. No se permite registrar ahorros desde el sueldo.`
+          error: `Presupuesto mensual agotado. Se ha consumido S/. ${cashTotal.toFixed(2)} de S/. ${budgetLimit.toFixed(2)}. No se permite registrar ahorros desde el sueldo.`
         });
       }
 

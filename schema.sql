@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS monthly_budgets (
     income_chris_pen NUMERIC(10, 2) DEFAULT 2809.90,
     income_solansh_pen NUMERIC(10, 2) DEFAULT 1550.00,
     budget_limit_pen NUMERIC(10, 2) DEFAULT 3000.00,
+    credit_limit_bcp_pen NUMERIC(10, 2) DEFAULT 1000.00,
+    credit_limit_ripley_pen NUMERIC(10, 2) DEFAULT 500.00,
     email_sent_100 BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
