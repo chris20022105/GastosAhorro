@@ -308,19 +308,7 @@ export default function App() {
       {isDueAlertOpen && dueLoans.length > 0 && createPortal(
         <>
           <div className="overlay open" onClick={() => setIsDueAlertOpen(false)}></div>
-          <div className="login-card" style={{
-            position: 'fixed',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            zIndex: 1000,
-            maxWidth: '340px',
-            borderRadius: '24px',
-            padding: '28px 24px',
-            textAlign: 'center',
-            boxShadow: 'var(--shadow-lg)',
-            border: '1px solid rgba(0,0,0,0.02)'
-          }}>
+          <div className="ios-alert-modal">
             <span style={{ fontSize: '32px' }}>⚠️</span>
             <h3 style={{ fontSize: '18px', fontWeight: '800', marginTop: '12px', color: 'var(--ios-text)' }}>
               Cobros Pendientes
