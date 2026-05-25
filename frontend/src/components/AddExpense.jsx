@@ -32,6 +32,10 @@ export default function AddExpense({ isOpen, onClose, onExpenseAdded, token, use
     { name: 'Transporte y Uber', emoji: '🚗' },
     { name: 'Suscripciones', emoji: '📺' },
     { name: 'Entretenimiento', emoji: '🎬' },
+    { name: 'Tarjeta BCP', emoji: '💳', shortName: 'TC BCP' },
+    { name: 'Tarjeta Ripley', emoji: '🛍️', shortName: 'TC Ripley' },
+    { name: 'Pago Tarjeta BCP', emoji: '💸', shortName: 'Pago BCP' },
+    { name: 'Pago Tarjeta Ripley', emoji: '💸', shortName: 'Pago Ripley' },
     { name: 'Otros', emoji: '📦' }
   ];
 
@@ -40,12 +44,38 @@ export default function AddExpense({ isOpen, onClose, onExpenseAdded, token, use
   const budgetLimit = budget ? parseFloat(budget.budget_limit_pen) : 3000;
   const isBlocked = budget && totalSpent >= budgetLimit;
 
+  // Lógica de bloqueo por Tarjetas de Crédito
+  const bcpLimit = budget ? parseFloat(budget.credit_limit_bcp_pen) : 1000;
+  const bcpSpent = stats?.spentBcp || 0;
+  const isBcpBlocked = bcpSpent >= bcpLimit;
+
+  const ripleyLimit = budget ? parseFloat(budget.credit_limit_ripley_pen) : 500;
+  const ripleySpent = stats?.spentRipley || 0;
+  const isRipleyBlocked = ripleySpent >= ripleyLimit;
+
+  const isCardPurchase = ['Tarjeta BCP', 'Tarjeta Ripley'].includes(category);
+  const isSubmitBlocked = isCardPurchase
+    ? (category === 'Tarjeta BCP' ? isBcpBlocked : isRipleyBlocked)
+    : isBlocked;
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
-    if (isBlocked) {
-      setError('El presupuesto de este mes ya está agotado. No se permiten registrar más gastos.');
+    const isCurrentBlocked = category === 'Tarjeta BCP'
+      ? isBcpBlocked
+      : category === 'Tarjeta Ripley'
+        ? isRipleyBlocked
+        : isBlocked;
+
+    if (isCurrentBlocked) {
+      setError(
+        category === 'Tarjeta BCP'
+          ? 'El límite de crédito de la tarjeta BCP ya se encuentra agotado.'
+          : category === 'Tarjeta Ripley'
+            ? 'El límite de crédito de la tarjeta Ripley ya se encuentra agotado.'
+            : 'El presupuesto de efectivo de este mes ya está agotado.'
+      );
       return;
     }
 
@@ -211,7 +241,7 @@ export default function AddExpense({ isOpen, onClose, onExpenseAdded, token, use
                   onClick={() => !loading && setCategory(cat.name)}
                 >
                   <span className="emoji">{cat.emoji}</span>
-                  <span>{cat.name.split(' ')[0]}</span>
+                  <span>{cat.shortName || cat.name.split(' ')[0]}</span>
                 </div>
               ))}
             </div>
@@ -253,13 +283,19 @@ export default function AddExpense({ isOpen, onClose, onExpenseAdded, token, use
           <button 
             type="submit" 
             className="btn-primary" 
-            disabled={loading || isBlocked} 
-            style={{ backgroundColor: isBlocked ? '#86868b' : '' }}
+            disabled={loading || isSubmitBlocked} 
+            style={{ backgroundColor: isSubmitBlocked ? '#86868b' : '' }}
           >
             {loading ? (
               <span>Registrando y enviando correos...</span>
-            ) : isBlocked ? (
-              <span>Presupuesto Agotado 🔒</span>
+            ) : isSubmitBlocked ? (
+              <span>
+                {category === 'Tarjeta BCP' 
+                  ? 'Límite BCP Excedido 🔒' 
+                  : category === 'Tarjeta Ripley' 
+                    ? 'Límite Ripley Excedido 🔒' 
+                    : 'Presupuesto Agotado 🔒'}
+              </span>
             ) : (
               <>
                 <Plus size={18} />
