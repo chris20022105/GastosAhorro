@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Wallet, Sparkles, Heart, Sliders, X, Lock, AlertTriangle, CalendarDays } from 'lucide-react';
+import { Wallet, Sparkles, Heart, Sliders, X, Lock, AlertTriangle, CalendarDays, Plus } from 'lucide-react';
 import useScrollLock from '../hooks/useScrollLock';
 
 export default function Dashboard({ stats, user, onUpdateBudget, token }) {
