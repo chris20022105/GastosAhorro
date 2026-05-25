@@ -254,16 +254,16 @@ export default function CreditCards({ stats, user, onUpdateBudget, token, expens
       {/* Grid de Tarjetas (Visual Premium) */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
         
-        {/* Tarjeta BCP (Azul BCP Original) */}
+        {/* Tarjeta BCP (Azul y Naranja BCP) */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <div style={{
-            background: 'linear-gradient(135deg, #092c57 0%, #005ca9 100%)',
+            background: 'linear-gradient(135deg, #002A54 0%, #004481 65%, #FF7F00 100%)',
             borderRadius: '20px',
             padding: '22px',
             color: '#ffffff',
             position: 'relative',
             overflow: 'hidden',
-            boxShadow: '0 8px 24px rgba(0, 92, 169, 0.25)',
+            boxShadow: '0 8px 24px rgba(0, 42, 84, 0.25)',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'space-between',
@@ -331,28 +331,28 @@ export default function CreditCards({ stats, user, onUpdateBudget, token, expens
             }}
             className="btn-primary"
             style={{
-              backgroundColor: '#005ca9',
+              backgroundColor: '#002A54',
               borderRadius: '14px',
               padding: '12px',
               fontWeight: '700',
               fontSize: '14px',
-              boxShadow: '0 4px 12px rgba(0, 92, 169, 0.15)'
+              boxShadow: '0 4px 12px rgba(0, 42, 84, 0.15)'
             }}
           >
             Pagar Tarjeta BCP 💸
           </button>
         </div>
 
-        {/* Tarjeta Ripley (Naranja Ripley Original) */}
+        {/* Tarjeta Ripley (Plateada / Gris Premium) */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <div style={{
-            background: 'linear-gradient(135deg, #2b0b00 0%, #ec6707 100%)',
+            background: 'linear-gradient(135deg, #3a3a3c 0%, #7c7c80 50%, #d1d1d6 100%)',
             borderRadius: '20px',
             padding: '22px',
             color: '#ffffff',
             position: 'relative',
             overflow: 'hidden',
-            boxShadow: '0 8px 24px rgba(236, 103, 7, 0.25)',
+            boxShadow: '0 8px 24px rgba(100, 100, 100, 0.2)',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'space-between',
@@ -420,12 +420,12 @@ export default function CreditCards({ stats, user, onUpdateBudget, token, expens
             }}
             className="btn-primary"
             style={{
-              backgroundColor: '#ec6707',
+              backgroundColor: '#48484a',
               borderRadius: '14px',
               padding: '12px',
               fontWeight: '700',
               fontSize: '14px',
-              boxShadow: '0 4px 12px rgba(236, 103, 7, 0.15)'
+              boxShadow: '0 4px 12px rgba(72, 72, 74, 0.15)'
             }}
           >
             Pagar Tarjeta Ripley 💸
@@ -505,7 +505,7 @@ export default function CreditCards({ stats, user, onUpdateBudget, token, expens
                       <div 
                         className="category-emoji-box" 
                         style={{ 
-                          backgroundColor: isBCP ? '#e1f0fa' : '#ffebe0',
+                          backgroundColor: isBCP ? '#e1f0fa' : '#f2f2f7',
                           fontSize: '18px'
                         }}
                       >
@@ -521,7 +521,7 @@ export default function CreditCards({ stats, user, onUpdateBudget, token, expens
                               borderRadius: '6px', 
                               fontSize: '10px', 
                               fontWeight: '700',
-                              backgroundColor: isBCP ? '#005ca9' : '#ec6707',
+                              backgroundColor: isBCP ? '#002A54' : '#636366',
                               color: '#ffffff'
                             }}
                           >
@@ -535,7 +535,7 @@ export default function CreditCards({ stats, user, onUpdateBudget, token, expens
                     </div>
 
                     <div className="expense-right">
-                      <span className="expense-amount" style={{ color: isBCP ? '#005ca9' : '#ec6707' }}>
+                      <span className="expense-amount" style={{ color: isBCP ? '#002A54' : '#48484a' }}>
                         S/. {parseFloat(exp.amount).toFixed(2)}
                       </span>
                       <button
@@ -676,7 +676,7 @@ export default function CreditCards({ stats, user, onUpdateBudget, token, expens
                     fontSize: '28px', 
                     fontWeight: '700', 
                     textAlign: 'center', 
-                    color: payCard === 'BCP' ? '#005ca9' : '#ec6707',
+                    color: payCard === 'BCP' ? '#002A54' : '#48484a',
                     padding: '16px'
                   }}
                   placeholder="0.00"
@@ -696,7 +696,7 @@ export default function CreditCards({ stats, user, onUpdateBudget, token, expens
                 type="submit" 
                 className="btn-primary" 
                 disabled={payLoading} 
-                style={{ backgroundColor: payCard === 'BCP' ? '#005ca9' : '#ec6707', boxShadow: 'none' }}
+                style={{ backgroundColor: payCard === 'BCP' ? '#002A54' : '#48484a', boxShadow: 'none' }}
               >
                 {payLoading ? (
                   <span>Registrando pago...</span>
