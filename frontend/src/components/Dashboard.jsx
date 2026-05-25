@@ -142,8 +142,8 @@ export default function Dashboard({ stats, user, onUpdateBudget, token }) {
           income_chris_pen: numChris,
           income_solansh_pen: numSolansh,
           budget_limit_pen: parseFloat(valLimit) || 0,
-          credit_limit_bcp_pen: parseFloat(valLimitBcp) || 0,
-          credit_limit_ripley_pen: parseFloat(valLimitRipley) || 0
+          credit_limit_bcp_pen: bcpLimit,
+          credit_limit_ripley_pen: ripleyLimit
         })
       });
 
