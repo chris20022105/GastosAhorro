@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Sliders, Trash2, Calendar, Search, CreditCard, Sparkles, Plus } from 'lucide-react';
 import useScrollLock from '../hooks/useScrollLock';
@@ -55,10 +55,46 @@ export default function CreditCards({ stats, user, onUpdateBudget, token, expens
   const [configLoading, setConfigLoading] = useState(false);
   const [configError, setConfigError] = useState('');
 
-  // Estados de filtros de historial
+  // Estados de filtros de historial e indicadores de slider
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSpender, setSelectedSpender] = useState('Todos'); // 'Todos', 'Christopher', 'Solansh'
-  const [selectedCard, setSelectedCard] = useState('Todas'); // 'Todas', 'BCP', 'Ripley'
+  const [activeCardIndex, setActiveCardIndex] = useState(0); // 0 = BCP, 1 = Ripley
+  
+  const [startDate, setStartDate] = useState(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}-01`;
+  });
+  const [endDate, setEndDate] = useState(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+    const lastDay = new Date(year, month, 0).getDate();
+    return `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+  });
+
+  const scrollRef = useRef(null);
+
+  const handleScroll = (e) => {
+    const width = e.target.offsetWidth;
+    const scrollLeft = e.target.scrollLeft;
+    const index = Math.round(scrollLeft / width);
+    if (index !== activeCardIndex && (index === 0 || index === 1)) {
+      setActiveCardIndex(index);
+    }
+  };
+
+  const scrollToCard = (index) => {
+    if (scrollRef.current) {
+      const width = scrollRef.current.offsetWidth;
+      scrollRef.current.scrollTo({
+        left: index * width,
+        behavior: 'smooth'
+      });
+      setActiveCardIndex(index);
+    }
+  };
 
   // Inicializar inputs cuando se abren los modales
   useEffect(() => {
@@ -192,28 +228,30 @@ export default function CreditCards({ stats, user, onUpdateBudget, token, expens
     // 1. Filtrar solo por compras de tarjetas
     const isCard = exp.category === 'Tarjeta BCP' || exp.category === 'Tarjeta Ripley';
     if (!isCard) return false;
-
-    // 2. Filtro por búsqueda
-    const matchesSearch = 
-      exp.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      exp.category.toLowerCase().includes(searchQuery.toLowerCase());
-
-    // 3. Filtro por Spender
+ 
+    // 2. Filtrar por la tarjeta seleccionada en el slider (activeCardIndex: 0 = BCP, 1 = Ripley)
+    const targetCardCategory = activeCardIndex === 0 ? 'Tarjeta BCP' : 'Tarjeta Ripley';
+    if (exp.category !== targetCardCategory) return false;
+ 
+    // 3. Filtro por búsqueda
+    const matchesSearch = exp.description.toLowerCase().includes(searchQuery.toLowerCase());
+ 
+    // 4. Filtro por Spender
     let matchesSpender = true;
     if (selectedSpender !== 'Todos') {
       matchesSpender = exp.spender_name.toLowerCase().includes(selectedSpender.toLowerCase());
     }
-
-    // 4. Filtro por Tarjeta BCP / Ripley
-    let matchesCardType = true;
-    if (selectedCard !== 'Todas') {
-      matchesCardType = 
-        selectedCard === 'BCP' 
-          ? exp.category === 'Tarjeta BCP' 
-          : exp.category === 'Tarjeta Ripley';
+ 
+    // 5. Filtro por fechas
+    let matchesDate = true;
+    if (startDate) {
+      matchesDate = matchesDate && (exp.date >= startDate);
     }
-
-    return matchesSearch && matchesSpender && matchesCardType;
+    if (endDate) {
+      matchesDate = matchesDate && (exp.date <= endDate);
+    }
+ 
+    return matchesSearch && matchesSpender && matchesDate;
   });
 
   return (
@@ -251,187 +289,233 @@ export default function CreditCards({ stats, user, onUpdateBudget, token, expens
         </button>
       </div>
 
-      {/* Grid de Tarjetas (Visual Premium) */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        
-        {/* Tarjeta BCP (Azul y Naranja BCP) */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <div style={{
-            background: 'linear-gradient(135deg, #002A54 0%, #004481 65%, #FF7F00 100%)',
-            borderRadius: '20px',
-            padding: '22px',
-            color: '#ffffff',
-            position: 'relative',
-            overflow: 'hidden',
-            boxShadow: '0 8px 24px rgba(0, 42, 84, 0.25)',
+      {/* Slider de Tarjetas (Visual Premium & Compacto) */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div 
+          ref={scrollRef}
+          onScroll={handleScroll}
+          style={{
             display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            minHeight: '190px'
-          }}>
-            {/* Card Reflection Overlay */}
+            overflowX: 'auto',
+            scrollSnapType: 'x mandatory',
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none',
+            WebkitOverflowScrolling: 'touch',
+            gap: '16px',
+            padding: '4px 0',
+            width: '100%'
+          }}
+          className="no-scrollbar"
+        >
+          {/* Tarjeta BCP */}
+          <div style={{ flex: '0 0 100%', scrollSnapAlign: 'center', width: '100%' }}>
             <div style={{
-              position: 'absolute',
-              top: '-60%',
-              left: '-60%',
-              width: '220%',
-              height: '220%',
-              background: 'radial-gradient(circle, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 70%)',
-              pointerEvents: 'none'
-            }} />
+              background: 'linear-gradient(135deg, #002A54 0%, #004481 65%, #FF7F00 100%)',
+              borderRadius: '20px',
+              padding: '22px',
+              color: '#ffffff',
+              position: 'relative',
+              overflow: 'hidden',
+              boxShadow: '0 8px 24px rgba(0, 42, 84, 0.25)',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              minHeight: '190px'
+            }}>
+              {/* Card Reflection Overlay */}
+              <div style={{
+                position: 'absolute',
+                top: '-60%',
+                left: '-60%',
+                width: '220%',
+                height: '220%',
+                background: 'radial-gradient(circle, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 70%)',
+                pointerEvents: 'none'
+              }} />
 
-            {/* Top row */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 1 }}>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: '15px', fontWeight: '800', letterSpacing: '1px', textTransform: 'uppercase' }}>
-                  BCP Crédito
+              {/* Top row */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 1 }}>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <span style={{ fontSize: '15px', fontWeight: '800', letterSpacing: '1px', textTransform: 'uppercase' }}>
+                    BCP Crédito
+                  </span>
+                  <span style={{ fontSize: '9px', opacity: 0.75, letterSpacing: '0.5px' }}>
+                    Visa Signature
+                  </span>
+                </div>
+                <CardChip />
+              </div>
+
+              {/* Middle row */}
+              <div style={{ margin: '12px 0', zIndex: 1 }}>
+                <span style={{ fontSize: '11px', opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Deuda Acumulada
                 </span>
-                <span style={{ fontSize: '9px', opacity: 0.75, letterSpacing: '0.5px' }}>
-                  Visa Signature
-                </span>
+                <div style={{ fontSize: '30px', fontWeight: '800', letterSpacing: '-0.5px', marginTop: '2px' }}>
+                  S/. {spentBcp.toFixed(2)}
+                </div>
               </div>
-              <CardChip />
-            </div>
 
-            {/* Middle row */}
-            <div style={{ margin: '12px 0', zIndex: 1 }}>
-              <span style={{ fontSize: '11px', opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                Deuda Acumulada
-              </span>
-              <div style={{ fontSize: '30px', fontWeight: '800', letterSpacing: '-0.5px', marginTop: '2px' }}>
-                S/. {spentBcp.toFixed(2)}
-              </div>
-            </div>
-
-            {/* Bottom row / Progress */}
-            <div style={{ zIndex: 1 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', opacity: 0.9, marginBottom: '6px' }}>
-                <span>Límite: S/. {bcpLimit.toFixed(0)}</span>
-                <span>Disp: S/. {(bcpLimit - spentBcp).toFixed(2)}</span>
-              </div>
-              <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.22)', height: '6px', borderRadius: '3px', overflow: 'hidden' }}>
-                <div 
-                  style={{ 
-                    backgroundColor: '#ffffff', 
-                    height: '100%', 
-                    width: `${bcpPercent}%`, 
-                    borderRadius: '3px', 
-                    transition: 'width 0.8s cubic-bezier(0.16, 1, 0.3, 1)' 
-                  }} 
-                />
+              {/* Bottom row / Progress */}
+              <div style={{ zIndex: 1 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', opacity: 0.9, marginBottom: '6px' }}>
+                  <span>Límite: S/. {bcpLimit.toFixed(0)}</span>
+                  <span>Disp: S/. {(bcpLimit - spentBcp).toFixed(2)}</span>
+                </div>
+                <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.22)', height: '6px', borderRadius: '3px', overflow: 'hidden' }}>
+                  <div 
+                    style={{ 
+                      backgroundColor: '#ffffff', 
+                      height: '100%', 
+                      width: `${bcpPercent}%`, 
+                      borderRadius: '3px', 
+                      transition: 'width 0.8s cubic-bezier(0.16, 1, 0.3, 1)' 
+                    }} 
+                  />
+                </div>
               </div>
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              setPayCard('BCP');
-              setIsPayOpen(true);
-            }}
-            className="btn-primary"
-            style={{
-              backgroundColor: '#002A54',
-              borderRadius: '14px',
-              padding: '12px',
-              fontWeight: '700',
-              fontSize: '14px',
-              boxShadow: '0 4px 12px rgba(0, 42, 84, 0.15)'
-            }}
-          >
-            Pagar Tarjeta BCP 💸
-          </button>
-        </div>
-
-        {/* Tarjeta Ripley (Plateada / Gris Premium) */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <div style={{
-            background: 'linear-gradient(135deg, #3a3a3c 0%, #7c7c80 50%, #d1d1d6 100%)',
-            borderRadius: '20px',
-            padding: '22px',
-            color: '#ffffff',
-            position: 'relative',
-            overflow: 'hidden',
-            boxShadow: '0 8px 24px rgba(100, 100, 100, 0.2)',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            minHeight: '190px'
-          }}>
-            {/* Card Reflection Overlay */}
+          {/* Tarjeta Ripley */}
+          <div style={{ flex: '0 0 100%', scrollSnapAlign: 'center', width: '100%' }}>
             <div style={{
-              position: 'absolute',
-              top: '-60%',
-              left: '-60%',
-              width: '220%',
-              height: '220%',
-              background: 'radial-gradient(circle, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 70%)',
-              pointerEvents: 'none'
-            }} />
+              background: 'linear-gradient(135deg, #3a3a3c 0%, #7c7c80 50%, #d1d1d6 100%)',
+              borderRadius: '20px',
+              padding: '22px',
+              color: '#ffffff',
+              position: 'relative',
+              overflow: 'hidden',
+              boxShadow: '0 8px 24px rgba(100, 100, 100, 0.2)',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              minHeight: '190px'
+            }}>
+              {/* Card Reflection Overlay */}
+              <div style={{
+                position: 'absolute',
+                top: '-60%',
+                left: '-60%',
+                width: '220%',
+                height: '220%',
+                background: 'radial-gradient(circle, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 70%)',
+                pointerEvents: 'none'
+              }} />
 
-            {/* Top row */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 1 }}>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: '15px', fontWeight: '800', letterSpacing: '1px', textTransform: 'uppercase' }}>
-                  Ripley
+              {/* Top row */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 1 }}>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <span style={{ fontSize: '15px', fontWeight: '800', letterSpacing: '1px', textTransform: 'uppercase' }}>
+                    Ripley
+                  </span>
+                  <span style={{ fontSize: '9px', opacity: 0.75, letterSpacing: '0.5px' }}>
+                    Mastercard Gold
+                  </span>
+                </div>
+                <CardChip />
+              </div>
+
+              {/* Middle row */}
+              <div style={{ margin: '12px 0', zIndex: 1 }}>
+                <span style={{ fontSize: '11px', opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Deuda Acumulada
                 </span>
-                <span style={{ fontSize: '9px', opacity: 0.75, letterSpacing: '0.5px' }}>
-                  Mastercard Gold
-                </span>
+                <div style={{ fontSize: '30px', fontWeight: '800', letterSpacing: '-0.5px', marginTop: '2px' }}>
+                  S/. {spentRipley.toFixed(2)}
+                </div>
               </div>
-              <CardChip />
-            </div>
 
-            {/* Middle row */}
-            <div style={{ margin: '12px 0', zIndex: 1 }}>
-              <span style={{ fontSize: '11px', opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                Deuda Acumulada
-              </span>
-              <div style={{ fontSize: '30px', fontWeight: '800', letterSpacing: '-0.5px', marginTop: '2px' }}>
-                S/. {spentRipley.toFixed(2)}
-              </div>
-            </div>
-
-            {/* Bottom row / Progress */}
-            <div style={{ zIndex: 1 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', opacity: 0.9, marginBottom: '6px' }}>
-                <span>Límite: S/. {ripleyLimit.toFixed(0)}</span>
-                <span>Disp: S/. {(ripleyLimit - spentRipley).toFixed(2)}</span>
-              </div>
-              <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.22)', height: '6px', borderRadius: '3px', overflow: 'hidden' }}>
-                <div 
-                  style={{ 
-                    backgroundColor: '#ffffff', 
-                    height: '100%', 
-                    width: `${ripleyPercent}%`, 
-                    borderRadius: '3px', 
-                    transition: 'width 0.8s cubic-bezier(0.16, 1, 0.3, 1)' 
-                  }} 
-                />
+              {/* Bottom row / Progress */}
+              <div style={{ zIndex: 1 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', opacity: 0.9, marginBottom: '6px' }}>
+                  <span>Límite: S/. {ripleyLimit.toFixed(0)}</span>
+                  <span>Disp: S/. {(ripleyLimit - spentRipley).toFixed(2)}</span>
+                </div>
+                <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.22)', height: '6px', borderRadius: '3px', overflow: 'hidden' }}>
+                  <div 
+                    style={{ 
+                      backgroundColor: '#ffffff', 
+                      height: '100%', 
+                      width: `${ripleyPercent}%`, 
+                      borderRadius: '3px', 
+                      transition: 'width 0.8s cubic-bezier(0.16, 1, 0.3, 1)' 
+                    }} 
+                  />
+                </div>
               </div>
             </div>
           </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              setPayCard('Ripley');
-              setIsPayOpen(true);
-            }}
-            className="btn-primary"
-            style={{
-              backgroundColor: '#48484a',
-              borderRadius: '14px',
-              padding: '12px',
-              fontWeight: '700',
-              fontSize: '14px',
-              boxShadow: '0 4px 12px rgba(72, 72, 74, 0.15)'
-            }}
-          >
-            Pagar Tarjeta Ripley 💸
-          </button>
         </div>
 
+        {/* Indicadores de página estilo iOS */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '2px', marginBottom: '4px' }}>
+          <div 
+            onClick={() => scrollToCard(0)}
+            style={{
+              width: activeCardIndex === 0 ? '16px' : '8px',
+              height: '8px',
+              borderRadius: '4px',
+              backgroundColor: activeCardIndex === 0 ? 'var(--color-primary)' : 'var(--ios-separator)',
+              transition: 'all 0.2s ease',
+              cursor: 'pointer'
+            }}
+          />
+          <div 
+            onClick={() => scrollToCard(1)}
+            style={{
+              width: activeCardIndex === 1 ? '16px' : '8px',
+              height: '8px',
+              borderRadius: '4px',
+              backgroundColor: activeCardIndex === 1 ? 'var(--color-primary)' : 'var(--ios-separator)',
+              transition: 'all 0.2s ease',
+              cursor: 'pointer'
+            }}
+          />
+        </div>
+
+        {/* Botón de Pago Único Dinámico */}
+        <div>
+          {activeCardIndex === 0 ? (
+            <button
+              type="button"
+              onClick={() => {
+                setPayCard('BCP');
+                setIsPayOpen(true);
+              }}
+              className="btn-primary"
+              style={{
+                backgroundColor: '#002A54',
+                borderRadius: '14px',
+                padding: '12px',
+                fontWeight: '700',
+                fontSize: '14px',
+                boxShadow: '0 4px 12px rgba(0, 42, 84, 0.15)'
+              }}
+            >
+              Pagar Tarjeta BCP 💸
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setPayCard('Ripley');
+                setIsPayOpen(true);
+              }}
+              className="btn-primary"
+              style={{
+                backgroundColor: '#48484a',
+                borderRadius: '14px',
+                padding: '12px',
+                fontWeight: '700',
+                fontSize: '14px',
+                boxShadow: '0 4px 12px rgba(72, 72, 74, 0.15)'
+              }}
+            >
+              Pagar Tarjeta Ripley 💸
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Historial Exclusivo de Tarjetas */}
@@ -439,6 +523,30 @@ export default function CreditCards({ stats, user, onUpdateBudget, token, expens
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '14px' }}>
           <CreditCard size={18} style={{ color: 'var(--color-primary)' }} />
           <h3 style={{ fontSize: '17px', fontWeight: '700', color: 'var(--ios-text)' }}>Historial de Consumos</h3>
+        </div>
+
+        {/* Rango de Fechas (Desde / Hasta) */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label" style={{ fontSize: '11px', color: 'var(--ios-text-secondary)', fontWeight: '700' }}>Desde</label>
+            <input
+              type="date"
+              className="form-input"
+              style={{ padding: '8px 12px', fontSize: '14px', minHeight: '38px' }}
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+          </div>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label" style={{ fontSize: '11px', color: 'var(--ios-text-secondary)', fontWeight: '700' }}>Hasta</label>
+            <input
+              type="date"
+              className="form-input"
+              style={{ padding: '8px 12px', fontSize: '14px', minHeight: '38px' }}
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
+          </div>
         </div>
 
         {/* Buscador */}
@@ -478,18 +586,6 @@ export default function CreditCards({ stats, user, onUpdateBudget, token, expens
             </button>
           </div>
 
-          {/* Card selector */}
-          <div className="segmented-control" style={{ margin: 0 }}>
-            <button className={selectedCard === 'Todas' ? 'active' : ''} onClick={() => setSelectedCard('Todas')}>
-              Todas
-            </button>
-            <button className={selectedCard === 'BCP' ? 'active' : ''} onClick={() => setSelectedCard('BCP')}>
-              BCP
-            </button>
-            <button className={selectedCard === 'Ripley' ? 'active' : ''} onClick={() => setSelectedCard('Ripley')}>
-              Ripley
-            </button>
-          </div>
         </div>
 
         {/* Lista de compras */}
