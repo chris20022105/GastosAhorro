@@ -9,6 +9,20 @@ export default function SavingsBox({ token, user, showToast }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const [startDate, setStartDate] = useState(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}-01`;
+  });
+  const [endDate, setEndDate] = useState(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+    const lastDay = new Date(year, month, 0).getDate();
+    return `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+  });
+
   // Estados para Modal Aporte
   const [isDepositOpen, setIsDepositOpen] = useState(false);
   const [depAmount, setDepAmount] = useState('');
@@ -82,22 +96,37 @@ export default function SavingsBox({ token, user, showToast }) {
   // Bloqueo de scroll cuando los modales están abiertos
   useScrollLock(isDepositOpen || isGoalOpen);
 
-  // Totales
+  // Totales globales
   const totalSaved = deposits.reduce((sum, d) => sum + parseFloat(d.amount), 0);
   const target = parseFloat(goal.target_amount) || 5000;
   const progressPercent = Math.min((totalSaved / target) * 100, 100);
   const remainingToGoal = Math.max(target - totalSaved, 0);
 
-  // Ahorro por persona
+  // Filtrar aportes por rango de fechas para listados y aportación
+  const filteredDeposits = deposits.filter((dep) => {
+    let matchesDate = true;
+    if (startDate) {
+      matchesDate = matchesDate && (dep.date >= startDate);
+    }
+    if (endDate) {
+      matchesDate = matchesDate && (dep.date <= endDate);
+    }
+    return matchesDate;
+  });
+
+  // Ahorro por persona en el período filtrado
   const partnerSavings = {};
-  deposits.forEach((dep) => {
+  filteredDeposits.forEach((dep) => {
     partnerSavings[dep.spender_name] = (partnerSavings[dep.spender_name] || 0) + parseFloat(dep.amount);
   });
   const partnerNames = Object.keys(partnerSavings);
 
+  // Total ahorrado en el período
+  const periodTotalSaved = filteredDeposits.reduce((sum, d) => sum + parseFloat(d.amount), 0);
+
   const getPartnerPercentage = (amount) => {
-    if (totalSaved === 0) return 0;
-    return Math.round((amount / totalSaved) * 100);
+    if (periodTotalSaved === 0) return 0;
+    return Math.round((amount / periodTotalSaved) * 100);
   };
 
   // Crear aporte
@@ -270,6 +299,30 @@ export default function SavingsBox({ token, user, showToast }) {
         </div>
       </div>
 
+      {/* Rango de Fechas (Desde / Hasta) */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '14px', marginBottom: '14px' }}>
+        <div className="form-group" style={{ marginBottom: 0 }}>
+          <label className="form-label" style={{ fontSize: '11px', color: 'var(--ios-text-secondary)', fontWeight: '700' }}>Desde</label>
+          <input
+            type="date"
+            className="form-input"
+            style={{ padding: '8px 12px', fontSize: '14px', minHeight: '38px' }}
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+          />
+        </div>
+        <div className="form-group" style={{ marginBottom: 0 }}>
+          <label className="form-label" style={{ fontSize: '11px', color: 'var(--ios-text-secondary)', fontWeight: '700' }}>Hasta</label>
+          <input
+            type="date"
+            className="form-input"
+            style={{ padding: '8px 12px', fontSize: '14px', minHeight: '38px' }}
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+          />
+        </div>
+      </div>
+
       {/* Participación de Ahorro */}
       <div className="section-title" style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
         <Users size={16} style={{ color: 'var(--color-primary)' }} />
@@ -321,9 +374,9 @@ export default function SavingsBox({ token, user, showToast }) {
       </div>
 
       <div className="expenses-card">
-        {deposits.length > 0 ? (
+        {filteredDeposits.length > 0 ? (
           <div className="list-container">
-            {deposits.map((dep) => (
+            {filteredDeposits.map((dep) => (
               <div key={dep.id} className="expense-item">
                 <div className="expense-left" style={{ minWidth: 0 }}>
                   <div className="category-emoji-box" style={{ backgroundColor: 'var(--color-primary-light)', color: 'var(--color-primary)', flexShrink: 0 }}>
@@ -376,7 +429,7 @@ export default function SavingsBox({ token, user, showToast }) {
           </div>
         ) : (
           <div className="no-expenses">
-            No hay depósitos en la caja de ahorro aún. ¡Registra el primero! 🌱
+            No hay depósitos en el período seleccionado. 🌱
           </div>
         )}
       </div>

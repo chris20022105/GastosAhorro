@@ -5,6 +5,19 @@ export default function ExpenseList({ expenses, onDeleteExpense, user }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSpender, setSelectedSpender] = useState('Todos'); // 'Todos', 'Christopher', 'Solansh'
   const [selectedCategory, setSelectedCategory] = useState('Todas'); // 'Todas', ...
+  const [startDate, setStartDate] = useState(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}-01`;
+  });
+  const [endDate, setEndDate] = useState(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+    const lastDay = new Date(year, month, 0).getDate();
+    return `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+  });
 
   const categoryEmojis = {
     'Café y Bebidas': '☕',
@@ -49,7 +62,16 @@ export default function ExpenseList({ expenses, onDeleteExpense, user }) {
     // 3. Filtro por Categoría
     const matchesCategory = selectedCategory === 'Todas' || exp.category === selectedCategory;
 
-    return matchesSearch && matchesSpender && matchesCategory;
+    // 4. Filtro por Rango de Fechas
+    let matchesDate = true;
+    if (startDate) {
+      matchesDate = matchesDate && (exp.date >= startDate);
+    }
+    if (endDate) {
+      matchesDate = matchesDate && (exp.date <= endDate);
+    }
+
+    return matchesSearch && matchesSpender && matchesCategory && matchesDate;
   });
 
   return (
@@ -74,6 +96,30 @@ export default function ExpenseList({ expenses, onDeleteExpense, user }) {
             color: 'var(--ios-text-secondary)'
           }} 
         />
+      </div>
+
+      {/* Rango de Fechas (Desde / Hasta) */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
+        <div className="form-group" style={{ marginBottom: 0 }}>
+          <label className="form-label" style={{ fontSize: '11px', color: 'var(--ios-text-secondary)', fontWeight: '700' }}>Desde</label>
+          <input
+            type="date"
+            className="form-input"
+            style={{ padding: '8px 12px', fontSize: '14px', minHeight: '38px' }}
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+          />
+        </div>
+        <div className="form-group" style={{ marginBottom: 0 }}>
+          <label className="form-label" style={{ fontSize: '11px', color: 'var(--ios-text-secondary)', fontWeight: '700' }}>Hasta</label>
+          <input
+            type="date"
+            className="form-input"
+            style={{ padding: '8px 12px', fontSize: '14px', minHeight: '38px' }}
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+          />
+        </div>
       </div>
 
       {/* Control Segmentado de Miembro */}
