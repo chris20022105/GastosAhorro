@@ -11,16 +11,37 @@ export default function SavingsBox({ token, user, showToast }) {
 
   const [startDate, setStartDate] = useState(() => {
     const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    return `${year}-${month}-01`;
+    let cycleYear = now.getFullYear();
+    let cycleMonth = now.getMonth(); // 0-indexed
+    if (now.getDate() < 26) {
+      cycleMonth = cycleMonth - 1;
+      if (cycleMonth < 0) {
+        cycleMonth = 11;
+        cycleYear = cycleYear - 1;
+      }
+    }
+    const mStr = String(cycleMonth + 1).padStart(2, '0');
+    return `${cycleYear}-${mStr}-26`;
   });
   const [endDate, setEndDate] = useState(() => {
     const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth() + 1;
-    const lastDay = new Date(year, month, 0).getDate();
-    return `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    let cycleYear = now.getFullYear();
+    let cycleMonth = now.getMonth(); // 0-indexed
+    if (now.getDate() < 26) {
+      cycleMonth = cycleMonth - 1;
+      if (cycleMonth < 0) {
+        cycleMonth = 11;
+        cycleYear = cycleYear - 1;
+      }
+    }
+    let nextMonth = cycleMonth + 1;
+    let nextYear = cycleYear;
+    if (nextMonth > 11) {
+      nextMonth = 0;
+      nextYear = cycleYear + 1;
+    }
+    const mStr = String(nextMonth + 1).padStart(2, '0');
+    return `${nextYear}-${mStr}-25`;
   });
 
   // Estados para Modal Aporte

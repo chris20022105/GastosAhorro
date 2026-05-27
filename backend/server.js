@@ -40,12 +40,68 @@ const supabase = createClient(supabaseUrl || 'https://placeholder.supabase.co', 
 // Importar servicio de correo
 const { sendExpenseNotification, sendBudgetExceededNotification, sendSavingsNotification, sendLoanReminderNotification } = require('./services/emailService');
 
-// Helpers de zona horaria para Perú (GMT-5)
+// Helpers de zona horaria y ciclo personalizado (26 a 25) para Perú (GMT-5)
+const getCycleFromDateStr = (dateStr) => {
+  const parts = dateStr.split('-');
+  const y = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10);
+  const d = parseInt(parts[2], 10);
+  
+  if (d >= 26) {
+    const mmStr = m < 10 ? `0${m}` : `${m}`;
+    return `${y}-${mmStr}`;
+  } else {
+    let prevM = m - 1;
+    let prevY = y;
+    if (prevM === 0) {
+      prevM = 12;
+      prevY = y - 1;
+    }
+    const prevMStr = prevM < 10 ? `0${prevM}` : `${prevM}`;
+    return `${prevY}-${prevMStr}`;
+  }
+};
+
+const getCycleDateRange = (yearMonth) => {
+  const parts = yearMonth.split('-');
+  const y = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10);
+  
+  const startStr = `${parts[0]}-${parts[1]}-26`;
+  
+  let nextM = m + 1;
+  let nextY = y;
+  if (nextM > 12) {
+    nextM = 1;
+    nextY = y + 1;
+  }
+  const nextMStr = nextM < 10 ? `0${nextM}` : `${nextM}`;
+  const endStr = `${nextY}-${nextMStr}-25`;
+  
+  return { start: startStr, end: endStr };
+};
+
+const getPreviousCycle = (yearMonth) => {
+  const parts = yearMonth.split('-');
+  const y = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10);
+  
+  let prevM = m - 1;
+  let prevY = y;
+  if (prevM === 0) {
+    prevM = 12;
+    prevY = y - 1;
+  }
+  const prevMStr = prevM < 10 ? `0${prevM}` : `${prevM}`;
+  return `${prevY}-${prevMStr}`;
+};
+
 const getPeruMonth = () => {
   const d = new Date();
   const utc = d.getTime() + (d.getTimezoneOffset() * 60000);
   const peruDate = new Date(utc + (3600000 * -5));
-  return peruDate.toISOString().substring(0, 7); // 'YYYY-MM'
+  const dateStr = peruDate.toISOString().split('T')[0];
+  return getCycleFromDateStr(dateStr);
 };
 
 const getPeruDate = () => {
@@ -54,6 +110,52 @@ const getPeruDate = () => {
   const peruDate = new Date(utc + (3600000 * -5));
   return peruDate.toISOString().split('T')[0]; // 'YYYY-MM-DD'
 };
+
+const getOrInitializeBudget = async (yearMonth) => {
+  let { data: budget, error } = await supabase
+    .from('monthly_budgets')
+    .select('*')
+    .eq('year_month', yearMonth)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  if (!budget) {
+    const prevCycle = getPreviousCycle(yearMonth);
+    const { data: prevBudget } = await supabase
+      .from('monthly_budgets')
+      .select('*')
+      .eq('year_month', prevCycle)
+      .maybeSingle();
+
+    const chrisIncome = prevBudget ? Math.abs(parseFloat(prevBudget.income_chris_pen)) : 2809.90;
+    const solanshIncome = prevBudget ? parseFloat(prevBudget.income_solansh_pen) : 1550.00;
+    const budgetLimit = prevBudget ? parseFloat(prevBudget.budget_limit_pen) : 3000.00;
+    const creditLimitBcp = prevBudget ? parseFloat(prevBudget.credit_limit_bcp_pen) : 1000.00;
+    const creditLimitRipley = prevBudget ? parseFloat(prevBudget.credit_limit_ripley_pen) : 500.00;
+
+    const defaultBudget = {
+      year_month: yearMonth,
+      income_chris_pen: -chrisIncome, // Sentinel value: negative Chris income denotes unconfirmed budget
+      income_solansh_pen: solanshIncome,
+      budget_limit_pen: budgetLimit,
+      credit_limit_bcp_pen: creditLimitBcp,
+      credit_limit_ripley_pen: creditLimitRipley,
+      email_sent_100: false
+    };
+
+    const { data: inserted, error: insertError } = await supabase
+      .from('monthly_budgets')
+      .insert([defaultBudget])
+      .select();
+
+    if (insertError) throw insertError;
+    budget = inserted[0];
+  }
+
+  return budget;
+};
+
 
 
 // Middleware para verificar JWT
@@ -166,42 +268,20 @@ app.post('/api/expenses', authenticateToken, async (req, res) => {
   }
 
   const expenseDate = date || getPeruDate();
-  const targetMonth = expenseDate.substring(0, 7); // 'YYYY-MM'
+  const targetMonth = getCycleFromDateStr(expenseDate); // 'YYYY-MM'
 
   try {
     // 1. Obtener presupuesto de este mes (inicializar si no existe)
-    let { data: budget, error: budgetError } = await supabase
-      .from('monthly_budgets')
-      .select('*')
-      .eq('year_month', targetMonth)
-      .maybeSingle();
-
-    if (budgetError) throw budgetError;
-
-    if (!budget) {
-      const defaultBudget = {
-        year_month: targetMonth,
-        income_chris_pen: 2809.90,
-        income_solansh_pen: 1550.00,
-        budget_limit_pen: 3000.00,
-        email_sent_100: false
-      };
-
-      const { data: inserted, error: insertError } = await supabase
-        .from('monthly_budgets')
-        .insert([defaultBudget])
-        .select();
-
-      if (insertError) throw insertError;
-      budget = inserted[0];
-    }
+    let budget = await getOrInitializeBudget(targetMonth);
 
     // 2. Calcular gastos ya registrados de este mes
+    const { start, end } = getCycleDateRange(targetMonth);
     const { data: monthExpenses, error: expError } = await supabase
       .from('expenses')
       .select('amount, category')
-      .gte('date', `${targetMonth}-01`)
-      .lte('date', `${targetMonth}-31`);
+      .gte('date', start)
+      .lte('date', end);
+
 
     if (expError) throw expError;
 
@@ -334,7 +414,7 @@ app.delete('/api/expenses/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'El gasto no existe.' });
     }
 
-    const targetMonth = expense.date.substring(0, 7);
+    const targetMonth = getCycleFromDateStr(expense.date);
 
     // 2. Eliminar de la base de datos
     const { error: deleteError } = await supabase
@@ -345,11 +425,12 @@ app.delete('/api/expenses/:id', authenticateToken, async (req, res) => {
     if (deleteError) throw deleteError;
 
     // 3. Recalcular total de gastos de este mes
+    const { start, end } = getCycleDateRange(targetMonth);
     const { data: monthExpenses } = await supabase
       .from('expenses')
       .select('amount')
-      .gte('date', `${targetMonth}-01`)
-      .lte('date', `${targetMonth}-31`);
+      .gte('date', start)
+      .lte('date', end);
 
     const newTotal = (monthExpenses || []).reduce((sum, e) => sum + parseFloat(e.amount), 0);
 
@@ -389,34 +470,7 @@ app.get('/api/budget/:yearMonth', authenticateToken, async (req, res) => {
   }
 
   try {
-    let { data: budget, error } = await supabase
-      .from('monthly_budgets')
-      .select('*')
-      .eq('year_month', yearMonth)
-      .maybeSingle();
-
-    if (error) throw error;
-
-    if (!budget) {
-      const defaultBudget = {
-        year_month: yearMonth,
-        income_chris_pen: 2809.90,
-        income_solansh_pen: 1550.00,
-        budget_limit_pen: 3000.00,
-        credit_limit_bcp_pen: 1000.00,
-        credit_limit_ripley_pen: 500.00,
-        email_sent_100: false
-      };
-
-      const { data: inserted, error: insertError } = await supabase
-        .from('monthly_budgets')
-        .insert([defaultBudget])
-        .select();
-
-      if (insertError) throw insertError;
-      budget = inserted[0];
-    }
-
+    const budget = await getOrInitializeBudget(yearMonth);
     res.json(budget);
   } catch (err) {
     console.error('Error al obtener presupuesto:', err);
@@ -456,11 +510,12 @@ app.put('/api/budget/:yearMonth', authenticateToken, async (req, res) => {
       .eq('year_month', yearMonth)
       .maybeSingle();
 
+    const { start, end } = getCycleDateRange(yearMonth);
     const { data: expenses } = await supabase
       .from('expenses')
       .select('amount, category')
-      .gte('date', `${yearMonth}-01`)
-      .lte('date', `${yearMonth}-31`);
+      .gte('date', start)
+      .lte('date', end);
 
     let cashTotal = 0;
     (expenses || []).forEach(e => {
@@ -501,40 +556,15 @@ app.get('/api/stats', authenticateToken, async (req, res) => {
 
   try {
     // 1. Obtener/Inicializar presupuesto de este mes
-    let { data: budget, error: budgetError } = await supabase
-      .from('monthly_budgets')
-      .select('*')
-      .eq('year_month', month)
-      .maybeSingle();
-
-    if (budgetError) throw budgetError;
-
-    if (!budget) {
-      const defaultBudget = {
-        year_month: month,
-        income_chris_pen: 2809.90,
-        income_solansh_pen: 1550.00,
-        budget_limit_pen: 3000.00,
-        credit_limit_bcp_pen: 1000.00,
-        credit_limit_ripley_pen: 500.00,
-        email_sent_100: false
-      };
-
-      const { data: inserted, error: insertError } = await supabase
-        .from('monthly_budgets')
-        .insert([defaultBudget])
-        .select();
-
-      if (insertError) throw insertError;
-      budget = inserted[0];
-    }
+    const budget = await getOrInitializeBudget(month);
 
     // 2. Traer todos los gastos de este mes
+    const { start, end } = getCycleDateRange(month);
     const { data: expenses, error } = await supabase
       .from('expenses')
       .select('*')
-      .gte('date', `${month}-01`)
-      .lte('date', `${month}-31`);
+      .gte('date', start)
+      .lte('date', end);
 
     if (error) throw error;
 
@@ -721,7 +751,7 @@ app.post('/api/savings/deposits', authenticateToken, async (req, res) => {
   }
 
   const depositDate = date || getPeruDate();
-  const targetMonth = depositDate.substring(0, 7); // 'YYYY-MM'
+  const targetMonth = getCycleFromDateStr(depositDate); // 'YYYY-MM'
 
   try {
     let expenseId = null;
@@ -732,43 +762,18 @@ app.post('/api/savings/deposits', authenticateToken, async (req, res) => {
     // Si proviene del sueldo, validar presupuesto e insertar gasto primero
     if (isFromSalary) {
       // 1. Obtener/Inicializar presupuesto de este mes
-      let { data: budgetData, error: budgetError } = await supabase
-        .from('monthly_budgets')
-        .select('*')
-        .eq('year_month', targetMonth)
-        .maybeSingle();
-
-      if (budgetError) throw budgetError;
-
-      if (!budgetData) {
-        const defaultBudget = {
-          year_month: targetMonth,
-          income_chris_pen: 2809.90,
-          income_solansh_pen: 1550.00,
-          budget_limit_pen: 3000.00,
-          credit_limit_bcp_pen: 1000.00,
-          credit_limit_ripley_pen: 500.00,
-          email_sent_100: false
-        };
-
-        const { data: inserted, error: insertError } = await supabase
-          .from('monthly_budgets')
-          .insert([defaultBudget])
-          .select();
-
-        if (insertError) throw insertError;
-        budgetData = inserted[0];
-      }
+      let budgetData = await getOrInitializeBudget(targetMonth);
 
       budget = budgetData;
       budgetLimit = parseFloat(budget.budget_limit_pen);
 
       // 2. Calcular gastos ya registrados de este mes (solo efectivo)
+      const { start, end } = getCycleDateRange(targetMonth);
       const { data: monthExpenses, error: expError } = await supabase
         .from('expenses')
         .select('amount, category')
-        .gte('date', `${targetMonth}-01`)
-        .lte('date', `${targetMonth}-31`);
+        .gte('date', start)
+        .lte('date', end);
 
       if (expError) throw expError;
 
@@ -929,7 +934,7 @@ app.delete('/api/savings/deposits/:id', authenticateToken, async (req, res) => {
         .maybeSingle();
 
       if (expense) {
-        const targetMonth = expense.date.substring(0, 7);
+        const targetMonth = getCycleFromDateStr(expense.date);
 
         // Eliminar el gasto
         await supabase
@@ -938,11 +943,12 @@ app.delete('/api/savings/deposits/:id', authenticateToken, async (req, res) => {
           .eq('id', deposit.expense_id);
 
         // Recalcular total de gastos de este mes
+        const { start, end } = getCycleDateRange(targetMonth);
         const { data: monthExpenses } = await supabase
           .from('expenses')
           .select('amount')
-          .gte('date', `${targetMonth}-01`)
-          .lte('date', `${targetMonth}-31`);
+          .gte('date', start)
+          .lte('date', end);
 
         const newTotal = (monthExpenses || []).reduce((sum, e) => sum + parseFloat(e.amount), 0);
 

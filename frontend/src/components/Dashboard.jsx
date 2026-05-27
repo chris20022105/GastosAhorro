@@ -6,8 +6,9 @@ import useScrollLock from '../hooks/useScrollLock';
 export default function Dashboard({ stats, user, onUpdateBudget, token }) {
   const { totalSpent = 0, partnerSpent = {}, categorySpent = {}, budget } = stats;
 
+  const isConfirmed = budget ? parseFloat(budget.income_chris_pen) >= 0 : true;
   const budgetLimit = budget ? parseFloat(budget.budget_limit_pen) : 3000;
-  const incomeChris = budget ? parseFloat(budget.income_chris_pen) : 2809.90;
+  const incomeChris = budget ? Math.abs(parseFloat(budget.income_chris_pen)) : 2809.90;
   const incomeSolansh = budget ? parseFloat(budget.income_solansh_pen) : 1550.00;
   const bcpLimit = budget ? parseFloat(budget.credit_limit_bcp_pen) : 1000.00;
   const ripleyLimit = budget ? parseFloat(budget.credit_limit_ripley_pen) : 500.00;
@@ -24,32 +25,37 @@ export default function Dashboard({ stats, user, onUpdateBudget, token }) {
 
   // Cálculos de Micro-Límites (Presupuesto Diario/Semanal Dinámico)
   const today = new Date();
-  const currentYear = today.getFullYear();
-  const currentMonth = today.getMonth(); // 0-indexed
-  const currentDate = today.getDate();
+  const todayNoTime = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
-  // Determinar mes objetivo
-  let targetYear = currentYear;
-  let targetMonth = currentMonth;
+  // Determinar año y mes del ciclo
+  let cycleYear = today.getFullYear();
+  let cycleMonth = today.getMonth(); // 0-indexed
   if (yearMonth) {
     const parts = yearMonth.split('-');
     if (parts.length === 2) {
-      targetYear = parseInt(parts[0], 10);
-      targetMonth = parseInt(parts[1], 10) - 1;
+      cycleYear = parseInt(parts[0], 10);
+      cycleMonth = parseInt(parts[1], 10) - 1;
     }
   }
 
-  // Días totales en el mes objetivo
-  const totalDays = new Date(targetYear, targetMonth + 1, 0).getDate();
+  // Fecha inicio del ciclo: cycleYear-cycleMonth-26
+  const cycleStart = new Date(cycleYear, cycleMonth, 26);
+  // Fecha fin del ciclo: 25 del siguiente mes
+  const cycleEnd = new Date(cycleYear, cycleMonth + 1, 25);
 
-  // Días restantes en el mes objetivo (incluyendo hoy)
-  let remainingDays = 1;
-  if (targetYear === currentYear && targetMonth === currentMonth) {
-    remainingDays = totalDays - currentDate + 1;
-  } else if (new Date(targetYear, targetMonth) > today) {
-    remainingDays = totalDays; // Mes futuro
+  // Días totales en el ciclo
+  const diffTotalTime = cycleEnd.getTime() - cycleStart.getTime();
+  const totalDays = Math.round(diffTotalTime / (1000 * 60 * 60 * 24)) + 1;
+
+  // Días restantes en el ciclo (incluyendo hoy)
+  let remainingDays = 0;
+  if (todayNoTime < cycleStart) {
+    remainingDays = totalDays; // Aún no empieza el ciclo
+  } else if (todayNoTime > cycleEnd) {
+    remainingDays = 0; // Ya terminó el ciclo
   } else {
-    remainingDays = 0; // Mes pasado
+    const diffRemainingTime = cycleEnd.getTime() - todayNoTime.getTime();
+    remainingDays = Math.round(diffRemainingTime / (1000 * 60 * 60 * 24)) + 1;
   }
 
   // Presupuesto diario original
@@ -118,6 +124,17 @@ export default function Dashboard({ stats, user, onUpdateBudget, token }) {
       setError('');
     }
   }, [isModalOpen, incomeChris, incomeSolansh, budgetLimit]);
+
+  // Auto-abrir modal si el presupuesto no está confirmado para este ciclo
+  useEffect(() => {
+    if (budget && parseFloat(budget.income_chris_pen) < 0) {
+      const sessionKey = `hasAutoOpened-${budget.year_month}`;
+      if (!sessionStorage.getItem(sessionKey)) {
+        setIsModalOpen(true);
+        sessionStorage.setItem(sessionKey, 'true');
+      }
+    }
+  }, [budget]);
 
   // Bloquear scroll del fondo cuando los modales están abiertos
   useScrollLock(isModalOpen);
@@ -192,8 +209,48 @@ export default function Dashboard({ stats, user, onUpdateBudget, token }) {
     setValLimit(suggested.toString());
   };
 
+  const getCycleRangeText = (yearMonth) => {
+    if (!yearMonth) return '';
+    const parts = yearMonth.split('-');
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10) - 1; // 0-indexed
+    
+    const start = new Date(y, m, 26);
+    const end = new Date(y, m + 1, 25);
+    
+    const opt = { day: 'numeric', month: 'short' };
+    return `${start.toLocaleDateString('es-ES', opt)} a ${end.toLocaleDateString('es-ES', opt)}`;
+  };
+
   return (
     <div className="dashboard-content">
+      {!isConfirmed && (
+        <div className="alert-banner alert-banner-warning" style={{ animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)', border: '1px solid rgba(212, 107, 8, 0.2)', display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-start' }}>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <CalendarDays size={18} style={{ flexShrink: 0 }} />
+            <strong>¡Nuevo ciclo iniciado ({getCycleRangeText(yearMonth)})!</strong>
+          </div>
+          <div style={{ fontSize: '12px', opacity: 0.9, marginLeft: '26px' }}>
+            Por favor, confirma o actualiza los sueldos y el límite de gasto para este periodo.
+          </div>
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="btn-primary"
+            style={{
+              marginLeft: '26px',
+              padding: '6px 12px',
+              fontSize: '12px',
+              width: 'auto',
+              minHeight: 'auto',
+              background: 'var(--color-primary)',
+              marginTop: '4px'
+            }}
+            type="button"
+          >
+            Confirmar Presupuesto ✍️
+          </button>
+        </div>
+      )}
       {/* Banner de bloqueo (100% de Presupuesto) */}
       {isExceeded && (
         <div className="alert-banner alert-banner-danger" style={{ animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)' }}>
