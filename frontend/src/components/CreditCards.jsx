@@ -46,6 +46,7 @@ export default function CreditCards({ stats, user, onUpdateBudget, token, expens
   const [isPayOpen, setIsPayOpen] = useState(false);
   const [payCard, setPayCard] = useState(''); // 'BCP' o 'Ripley'
   const [payAmount, setPayAmount] = useState('');
+  const [payDescription, setPayDescription] = useState('');
   const [payLoading, setPayLoading] = useState(false);
   const [payError, setPayError] = useState('');
 
@@ -134,6 +135,7 @@ export default function CreditCards({ stats, user, onUpdateBudget, token, expens
     if (isPayOpen) {
       const defaultAmount = payCard === 'BCP' ? spentBcp : spentRipley;
       setPayAmount(defaultAmount.toFixed(2));
+      setPayDescription(`Pago Tarjeta ${payCard}`);
       setPayError('');
     }
   }, [isPayOpen, payCard, spentBcp, spentRipley]);
@@ -300,7 +302,7 @@ export default function CreditCards({ stats, user, onUpdateBudget, token, expens
         },
         body: JSON.stringify({
           amount: parsedAmount,
-          description: `Pago Tarjeta ${payCard}`,
+          description: payDescription.trim() || `Pago Tarjeta ${payCard}`,
           category: `Pago Tarjeta ${payCard}`,
           date: new Date().toISOString().split('T')[0]
         })
@@ -339,9 +341,9 @@ export default function CreditCards({ stats, user, onUpdateBudget, token, expens
 
   // Filtrar consumos cargados a las tarjetas
   const cardExpenses = expenses.filter((exp) => {
-    // 1. Filtrar solo por compras o estados de cuenta de tarjetas
-    const isBcpCategory = exp.category === 'Tarjeta BCP' || exp.category === 'Estado Cuenta BCP';
-    const isRipleyCategory = exp.category === 'Tarjeta Ripley' || exp.category === 'Estado Cuenta Ripley';
+    // 1. Filtrar por compras, estados de cuenta o pagos de tarjetas
+    const isBcpCategory = exp.category === 'Tarjeta BCP' || exp.category === 'Estado Cuenta BCP' || exp.category === 'Pago Tarjeta BCP';
+    const isRipleyCategory = exp.category === 'Tarjeta Ripley' || exp.category === 'Estado Cuenta Ripley' || exp.category === 'Pago Tarjeta Ripley';
     
     if (!isBcpCategory && !isRipleyCategory) return false;
  
@@ -796,23 +798,24 @@ export default function CreditCards({ stats, user, onUpdateBudget, token, expens
           <div className="list-container">
             {cardExpenses.length > 0 ? (
               cardExpenses.map((exp) => {
-                const isBCP = exp.category === 'Tarjeta BCP' || exp.category === 'Estado Cuenta BCP';
+                const isBCP = exp.category.includes('BCP');
                 const isStatement = exp.category === 'Estado Cuenta BCP' || exp.category === 'Estado Cuenta Ripley';
+                const isPayment = exp.category === 'Pago Tarjeta BCP' || exp.category === 'Pago Tarjeta Ripley';
                 const spenderName = exp.spender_name.split(' ')[0];
                 return (
-                  <div key={exp.id} className="expense-item" style={{ borderBottom: '1px solid var(--ios-separator)', opacity: isStatement ? 0.85 : 1 }}>
+                  <div key={exp.id} className="expense-item" style={{ borderBottom: '1px solid var(--ios-separator)', opacity: (isStatement || isPayment) ? 0.85 : 1 }}>
                     <div className="expense-left">
                       <div 
                         className="category-emoji-box" 
                         style={{ 
-                          backgroundColor: isStatement ? '#fef3c7' : isBCP ? '#e1f0fa' : '#f2f2f7',
+                          backgroundColor: isStatement ? '#fef3c7' : isPayment ? '#e6f4ea' : isBCP ? '#e1f0fa' : '#f2f2f7',
                           fontSize: '18px'
                         }}
                       >
-                        {isStatement ? '📄' : isBCP ? '💳' : '🛍️'}
+                        {isStatement ? '📄' : isPayment ? '💸' : isBCP ? '💳' : '🛍️'}
                       </div>
                       <div className="expense-info">
-                        <span className="expense-desc" style={{ fontWeight: isStatement ? '600' : 'normal' }}>
+                        <span className="expense-desc" style={{ fontWeight: (isStatement || isPayment) ? '600' : 'normal' }}>
                           {exp.description}
                         </span>
                         <div className="expense-meta">
@@ -823,11 +826,11 @@ export default function CreditCards({ stats, user, onUpdateBudget, token, expens
                               borderRadius: '6px', 
                               fontSize: '10px', 
                               fontWeight: '700',
-                              backgroundColor: isStatement ? '#d97706' : isBCP ? '#002A54' : '#636366',
+                              backgroundColor: isStatement ? '#d97706' : isPayment ? '#34c759' : isBCP ? '#002A54' : '#636366',
                               color: '#ffffff'
                             }}
                           >
-                            {isStatement ? 'Facturado' : isBCP ? 'BCP' : 'Ripley'}
+                            {isStatement ? 'Facturado' : isPayment ? 'Pago' : isBCP ? 'BCP' : 'Ripley'}
                           </span>
                           <span style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
                             <Calendar size={10} /> {formatDate(exp.date)}
@@ -837,8 +840,8 @@ export default function CreditCards({ stats, user, onUpdateBudget, token, expens
                     </div>
 
                     <div className="expense-right">
-                      <span className="expense-amount" style={{ color: isStatement ? '#d97706' : isBCP ? '#002A54' : '#48484a', fontWeight: isStatement ? '700' : 'normal' }}>
-                        S/. {parseFloat(exp.amount).toFixed(2)}
+                      <span className="expense-amount" style={{ color: isStatement ? '#d97706' : isPayment ? '#34c759' : isBCP ? '#002A54' : '#48484a', fontWeight: (isStatement || isPayment) ? '700' : 'normal' }}>
+                        {isPayment ? '-' : ''} S/. {parseFloat(exp.amount).toFixed(2)}
                       </span>
                       <button
                         className="btn-delete"
@@ -1033,6 +1036,19 @@ export default function CreditCards({ stats, user, onUpdateBudget, token, expens
                   required
                   disabled={payLoading}
                   autoFocus={isPayOpen}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '16px' }}>
+                <label className="form-label">Descripción</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder={`Ej. Pago Tarjeta ${payCard}`}
+                  value={payDescription}
+                  onChange={(e) => setPayDescription(e.target.value)}
+                  disabled={payLoading}
+                  required
                 />
               </div>
 

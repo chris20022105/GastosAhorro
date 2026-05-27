@@ -47,6 +47,10 @@ export default function ExpenseList({ expenses, onDeleteExpense, user }) {
     'Transporte y Uber': '🚗',
     'Suscripciones': '📺',
     'Entretenimiento': '🎬',
+    'Tarjeta BCP': '💳',
+    'Tarjeta Ripley': '💳',
+    'Pago Tarjeta BCP': '💸',
+    'Pago Tarjeta Ripley': '💸',
     'Otros': '📦'
   };
 
