@@ -820,16 +820,7 @@ export default function CreditCards({ stats, user, onUpdateBudget, token, expens
                         </span>
                         <div className="expense-meta">
                           <span className="spender-tag">{spenderName}</span>
-                          <span 
-                            style={{ 
-                              padding: '2px 6px', 
-                              borderRadius: '6px', 
-                              fontSize: '10px', 
-                              fontWeight: '700',
-                              backgroundColor: isStatement ? '#d97706' : isPayment ? '#34c759' : isBCP ? '#002A54' : '#636366',
-                              color: '#ffffff'
-                            }}
-                          >
+                          <span className={isStatement ? 'tag-statement' : isPayment ? 'tag-payment' : isBCP ? 'tag-bcp' : 'tag-ripley'}>
                             {isStatement ? 'Facturado' : isPayment ? 'Pago' : isBCP ? 'BCP' : 'Ripley'}
                           </span>
                           <span style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>

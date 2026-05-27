@@ -497,29 +497,88 @@ button, input, select {
   color: var(--ios-text-secondary);
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 2px;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin-top: 4px;
 }
 
 .spender-tag {
   background-color: var(--color-primary-light);
   color: var(--color-primary);
-  padding: 1px 6px;
+  padding: 2px 8px;
   border-radius: 100px;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tag-statement {
+  background-color: #d97706;
+  color: #ffffff;
+  padding: 2px 8px;
+  border-radius: 100px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tag-payment {
+  background-color: #34c759;
+  color: #ffffff;
+  padding: 2px 8px;
+  border-radius: 100px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tag-bcp {
+  background-color: #002A54;
+  color: #ffffff;
+  padding: 2px 8px;
+  border-radius: 100px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tag-ripley {
+  background-color: #636366;
+  color: #ffffff;
+  padding: 2px 8px;
+  border-radius: 100px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .expense-right {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-shrink: 0;
 }
 
 .expense-amount {
   font-size: 15px;
   font-weight: 700;
   color: var(--ios-text);
+  white-space: nowrap;
 }
 
 .btn-delete {
