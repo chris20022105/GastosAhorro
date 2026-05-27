@@ -68,6 +68,11 @@ export default function ExpenseList({ expenses, onDeleteExpense, user }) {
 
   // Filtrar gastos según filtros y búsqueda
   const filteredExpenses = expenses.filter((exp) => {
+    // Excluir Estado de Cuenta del listado general de gastos
+    if (exp.category === 'Estado Cuenta BCP' || exp.category === 'Estado Cuenta Ripley') {
+      return false;
+    }
+
     // 1. Filtro por búsqueda
     const matchesSearch = 
       exp.description.toLowerCase().includes(searchQuery.toLowerCase()) ||

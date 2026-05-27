@@ -316,6 +316,7 @@ app.post('/api/expenses', authenticateToken, async (req, res) => {
 
     const budgetLimit = parseFloat(budget.budget_limit_pen);
     const isCardPurchase = ['Tarjeta BCP', 'Tarjeta Ripley'].includes(category.trim());
+    const isStatementBalance = ['Estado Cuenta BCP', 'Estado Cuenta Ripley'].includes(category.trim());
 
     // 3. Validar límites correspondientes
     if (isCardPurchase) {
@@ -336,7 +337,7 @@ app.post('/api/expenses', authenticateToken, async (req, res) => {
           });
         }
       }
-    } else {
+    } else if (!isStatementBalance) {
       if (cashTotal >= budgetLimit) {
         return res.status(400).json({
           error: `Presupuesto mensual agotado. Se ha consumido S/. ${cashTotal.toFixed(2)} de S/. ${budgetLimit.toFixed(2)}. No se permite registrar más gastos en efectivo.`
@@ -364,19 +365,22 @@ app.post('/api/expenses', authenticateToken, async (req, res) => {
 
     const createdExpense = insertedData[0];
 
-    // Enviar notificación de correo en segundo plano
-    sendExpenseNotification(createdExpense).then(result => {
-      if (result.success) {
-        console.log(`Notificación de correo enviada para el gasto: ${createdExpense.id}`);
-      } else {
-        console.error('Fallo al enviar el correo:', result.error);
-      }
-    }).catch(err => {
-      console.error('Error no controlado en sendExpenseNotification:', err);
-    });
+    // Enviar notificación de correo en segundo plano (solo si no es Estado de Cuenta)
+    if (!isStatementBalance) {
+      sendExpenseNotification(createdExpense).then(result => {
+        if (result.success) {
+          console.log(`Notificación de correo enviada para el gasto: ${createdExpense.id}`);
+        } else {
+          console.error('Fallo al enviar el correo:', result.error);
+        }
+      }).catch(err => {
+        console.error('Error no controlado en sendExpenseNotification:', err);
+      });
+    }
 
-    // Enviar notificación de presupuesto completado (100%) si cruza el límite (solo efectivo)
-    if (!isCardPurchase && (cashTotal + parsedAmount) >= budgetLimit && !budget.email_sent_100) {
+    // Enviar notificación de presupuesto completado (100%) si cruza el límite (solo efectivo y no estado de cuenta)
+    if (!isCardPurchase && !isStatementBalance && (cashTotal + parsedAmount) >= budgetLimit && !budget.email_sent_100) {
+      const newTotal = cashTotal + parsedAmount;
       // Marcar de inmediato en BD para evitar envíos duplicados
       supabase
         .from('monthly_budgets')
@@ -618,11 +622,11 @@ app.get('/api/stats', authenticateToken, async (req, res) => {
         totalSpent += amt; // Gastos de efectivo normales
       }
 
-      // Por pareja (usar spender_name)
-      partnerSpent[exp.spender_name] = (partnerSpent[exp.spender_name] || 0) + amt;
-
-      // Por categoría
-      categorySpent[exp.category] = (categorySpent[exp.category] || 0) + amt;
+      // Por pareja (usar spender_name) y por categoría (excluyendo Estado de Cuenta)
+      if (exp.category !== 'Estado Cuenta BCP' && exp.category !== 'Estado Cuenta Ripley') {
+        partnerSpent[exp.spender_name] = (partnerSpent[exp.spender_name] || 0) + amt;
+        categorySpent[exp.category] = (categorySpent[exp.category] || 0) + amt;
+      }
     });
 
     const spentBcp = Math.max(0, bcpStatement + bcpPurchases - bcpPayments);
