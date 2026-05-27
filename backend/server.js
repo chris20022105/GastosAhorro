@@ -286,6 +286,8 @@ app.post('/api/expenses', authenticateToken, async (req, res) => {
     if (expError) throw expError;
 
     let cashTotal = 0;
+    let bcpStatement = 0;
+    let ripleyStatement = 0;
     let bcpPurchases = 0;
     let bcpPayments = 0;
     let ripleyPurchases = 0;
@@ -303,6 +305,10 @@ app.post('/api/expenses', authenticateToken, async (req, res) => {
       } else if (e.category === 'Pago Tarjeta Ripley') {
         ripleyPayments += amt;
         cashTotal += amt;
+      } else if (e.category === 'Estado Cuenta BCP') {
+        bcpStatement += amt;
+      } else if (e.category === 'Estado Cuenta Ripley') {
+        ripleyStatement += amt;
       } else {
         cashTotal += amt;
       }
@@ -315,18 +321,18 @@ app.post('/api/expenses', authenticateToken, async (req, res) => {
     if (isCardPurchase) {
       if (category.trim() === 'Tarjeta BCP') {
         const bcpLimit = parseFloat(budget.credit_limit_bcp_pen) || 1000.00;
-        const currentBcpDebt = Math.max(0, bcpPurchases - bcpPayments);
+        const currentBcpDebt = Math.max(0, bcpStatement + bcpPurchases - bcpPayments);
         if (currentBcpDebt + parsedAmount > bcpLimit) {
           return res.status(400).json({
-            error: `Límite de tarjeta BCP excedido. Consumo acumulado: S/. ${currentBcpDebt.toFixed(2)} de S/. ${bcpLimit.toFixed(2)}. No se permite registrar esta compra de S/. ${parsedAmount.toFixed(2)}.`
+            error: `Límite de tarjeta BCP excedido. Deuda total (incluyendo Estado de Cuenta): S/. ${currentBcpDebt.toFixed(2)} de S/. ${bcpLimit.toFixed(2)}. No se permite registrar esta compra de S/. ${parsedAmount.toFixed(2)}.`
           });
         }
       } else if (category.trim() === 'Tarjeta Ripley') {
         const ripleyLimit = parseFloat(budget.credit_limit_ripley_pen) || 500.00;
-        const currentRipleyDebt = Math.max(0, ripleyPurchases - ripleyPayments);
+        const currentRipleyDebt = Math.max(0, ripleyStatement + ripleyPurchases - ripleyPayments);
         if (currentRipleyDebt + parsedAmount > ripleyLimit) {
           return res.status(400).json({
-            error: `Límite de tarjeta Ripley excedido. Consumo acumulado: S/. ${currentRipleyDebt.toFixed(2)} de S/. ${ripleyLimit.toFixed(2)}. No se permite registrar esta compra de S/. ${parsedAmount.toFixed(2)}.`
+            error: `Límite de tarjeta Ripley excedido. Deuda total (incluyendo Estado de Cuenta): S/. ${currentRipleyDebt.toFixed(2)} de S/. ${ripleyLimit.toFixed(2)}. No se permite registrar esta compra de S/. ${parsedAmount.toFixed(2)}.`
           });
         }
       }
@@ -570,6 +576,8 @@ app.get('/api/stats', authenticateToken, async (req, res) => {
 
     // Calcular estadísticas
     let totalSpent = 0;
+    let bcpStatement = 0;
+    let ripleyStatement = 0;
     let bcpPurchases = 0;
     let bcpPayments = 0;
     let ripleyPurchases = 0;
@@ -602,6 +610,10 @@ app.get('/api/stats', authenticateToken, async (req, res) => {
       } else if (exp.category === 'Pago Tarjeta Ripley') {
         ripleyPayments += amt;
         totalSpent += amt; // El pago a la tarjeta sale del efectivo
+      } else if (exp.category === 'Estado Cuenta BCP') {
+        bcpStatement += amt;
+      } else if (exp.category === 'Estado Cuenta Ripley') {
+        ripleyStatement += amt;
       } else {
         totalSpent += amt; // Gastos de efectivo normales
       }
@@ -613,8 +625,8 @@ app.get('/api/stats', authenticateToken, async (req, res) => {
       categorySpent[exp.category] = (categorySpent[exp.category] || 0) + amt;
     });
 
-    const spentBcp = Math.max(0, bcpPurchases - bcpPayments);
-    const spentRipley = Math.max(0, ripleyPurchases - ripleyPayments);
+    const spentBcp = Math.max(0, bcpStatement + bcpPurchases - bcpPayments);
+    const spentRipley = Math.max(0, ripleyStatement + ripleyPurchases - ripleyPayments);
 
     res.json({
       month,
@@ -623,7 +635,13 @@ app.get('/api/stats', authenticateToken, async (req, res) => {
       categorySpent,
       budget,
       spentBcp,
-      spentRipley
+      spentRipley,
+      bcpStatement,
+      ripleyStatement,
+      bcpPurchases,
+      ripleyPurchases,
+      bcpPayments,
+      ripleyPayments
     });
   } catch (err) {
     console.error('Error al calcular estadísticas:', err);

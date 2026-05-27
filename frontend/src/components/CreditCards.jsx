@@ -52,6 +52,8 @@ export default function CreditCards({ stats, user, onUpdateBudget, token, expens
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [valLimitBcp, setValLimitBcp] = useState('');
   const [valLimitRipley, setValLimitRipley] = useState('');
+  const [valStatementBcp, setValStatementBcp] = useState('');
+  const [valStatementRipley, setValStatementRipley] = useState('');
   const [configLoading, setConfigLoading] = useState(false);
   const [configError, setConfigError] = useState('');
 
@@ -122,9 +124,11 @@ export default function CreditCards({ stats, user, onUpdateBudget, token, expens
     if (isConfigOpen) {
       setValLimitBcp(bcpLimit.toString());
       setValLimitRipley(ripleyLimit.toString());
+      setValStatementBcp((stats?.bcpStatement || 0).toString());
+      setValStatementRipley((stats?.ripleyStatement || 0).toString());
       setConfigError('');
     }
-  }, [isConfigOpen, bcpLimit, ripleyLimit]);
+  }, [isConfigOpen, bcpLimit, ripleyLimit, stats]);
 
   useEffect(() => {
     if (isPayOpen) {
@@ -137,7 +141,7 @@ export default function CreditCards({ stats, user, onUpdateBudget, token, expens
   // Lock body scroll
   useScrollLock(isPayOpen || isConfigOpen);
 
-  // Guardar configuración de límites
+  // Guardar configuración de límites y estados de cuenta
   const handleSaveConfig = async (e) => {
     e.preventDefault();
     setConfigLoading(true);
@@ -145,15 +149,18 @@ export default function CreditCards({ stats, user, onUpdateBudget, token, expens
 
     const bcpVal = parseFloat(valLimitBcp);
     const ripleyVal = parseFloat(valLimitRipley);
+    const stmtBcpVal = parseFloat(valStatementBcp) || 0;
+    const stmtRipleyVal = parseFloat(valStatementRipley) || 0;
 
-    if (isNaN(bcpVal) || bcpVal < 0 || isNaN(ripleyVal) || ripleyVal < 0) {
-      setConfigError('Por favor, ingresa límites de crédito válidos mayores o iguales a 0.');
+    if (isNaN(bcpVal) || bcpVal < 0 || isNaN(ripleyVal) || ripleyVal < 0 || stmtBcpVal < 0 || stmtRipleyVal < 0) {
+      setConfigError('Por favor, ingresa montos válidos mayores o iguales a 0.');
       setConfigLoading(false);
       return;
     }
 
     try {
-      const response = await fetch(`/api/budget/${yearMonth}`, {
+      // 1. Guardar límites de crédito en el presupuesto mensual
+      const budgetRes = await fetch(`/api/budget/${yearMonth}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -168,13 +175,99 @@ export default function CreditCards({ stats, user, onUpdateBudget, token, expens
         })
       });
 
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Error al guardar configuración');
+      const budgetData = await budgetRes.json();
+      if (!budgetRes.ok) {
+        throw new Error(budgetData.error || 'Error al guardar límites');
+      }
+
+      // 2. Procesar Estado de Cuenta BCP
+      const existingBcpStmt = expenses.find(exp => exp.category === 'Estado Cuenta BCP');
+      if (existingBcpStmt) {
+        if (stmtBcpVal !== parseFloat(existingBcpStmt.amount)) {
+          // Eliminar el existente ya que el valor cambió o se definió en 0
+          await fetch(`/api/expenses/${existingBcpStmt.id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          
+          if (stmtBcpVal > 0) {
+            await fetch('/api/expenses', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                amount: stmtBcpVal,
+                description: 'Estado de Cuenta Facturado BCP',
+                category: 'Estado Cuenta BCP',
+                date: startDate
+              })
+            });
+          }
+        }
+      } else if (stmtBcpVal > 0) {
+        // No existe pero se especificó un valor mayor a 0, insertar nuevo
+        await fetch('/api/expenses', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            amount: stmtBcpVal,
+            description: 'Estado de Cuenta Facturado BCP',
+            category: 'Estado Cuenta BCP',
+            date: startDate
+          })
+        });
+      }
+
+      // 3. Procesar Estado de Cuenta Ripley
+      const existingRipleyStmt = expenses.find(exp => exp.category === 'Estado Cuenta Ripley');
+      if (existingRipleyStmt) {
+        if (stmtRipleyVal !== parseFloat(existingRipleyStmt.amount)) {
+          // Eliminar el existente ya que el valor cambió o se definió en 0
+          await fetch(`/api/expenses/${existingRipleyStmt.id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          
+          if (stmtRipleyVal > 0) {
+            await fetch('/api/expenses', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                amount: stmtRipleyVal,
+                description: 'Estado de Cuenta Facturado Ripley',
+                category: 'Estado Cuenta Ripley',
+                date: startDate
+              })
+            });
+          }
+        }
+      } else if (stmtRipleyVal > 0) {
+        // No existe pero se especificó un valor mayor a 0, insertar nuevo
+        await fetch('/api/expenses', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            amount: stmtRipleyVal,
+            description: 'Estado de Cuenta Facturado Ripley',
+            category: 'Estado Cuenta Ripley',
+            date: startDate
+          })
+        });
       }
 
       setIsConfigOpen(false);
-      showToast('Líneas de crédito actualizadas');
+      showToast('Configuración de tarjetas actualizada');
       if (onUpdateBudget) {
         onUpdateBudget();
       }
@@ -246,13 +339,15 @@ export default function CreditCards({ stats, user, onUpdateBudget, token, expens
 
   // Filtrar consumos cargados a las tarjetas
   const cardExpenses = expenses.filter((exp) => {
-    // 1. Filtrar solo por compras de tarjetas
-    const isCard = exp.category === 'Tarjeta BCP' || exp.category === 'Tarjeta Ripley';
-    if (!isCard) return false;
+    // 1. Filtrar solo por compras o estados de cuenta de tarjetas
+    const isBcpCategory = exp.category === 'Tarjeta BCP' || exp.category === 'Estado Cuenta BCP';
+    const isRipleyCategory = exp.category === 'Tarjeta Ripley' || exp.category === 'Estado Cuenta Ripley';
+    
+    if (!isBcpCategory && !isRipleyCategory) return false;
  
     // 2. Filtrar por la tarjeta seleccionada en el slider (activeCardIndex: 0 = BCP, 1 = Ripley)
-    const targetCardCategory = activeCardIndex === 0 ? 'Tarjeta BCP' : 'Tarjeta Ripley';
-    if (exp.category !== targetCardCategory) return false;
+    if (activeCardIndex === 0 && !isBcpCategory) return false;
+    if (activeCardIndex === 1 && !isRipleyCategory) return false;
  
     // 3. Filtro por búsqueda
     const matchesSearch = exp.description.toLowerCase().includes(searchQuery.toLowerCase());
@@ -495,6 +590,93 @@ export default function CreditCards({ stats, user, onUpdateBudget, token, expens
           />
         </div>
 
+        {/* Desglose de Deuda del Estado de Cuenta vs Consumos Nuevos */}
+        {(() => {
+          const isBCP = activeCardIndex === 0;
+          const statement = isBCP ? (stats?.bcpStatement || 0) : (stats?.ripleyStatement || 0);
+          const purchases = isBCP ? (stats?.bcpPurchases || 0) : (stats?.ripleyPurchases || 0);
+          const payments = isBCP ? (stats?.bcpPayments || 0) : (stats?.ripleyPayments || 0);
+          const remainingStatement = Math.max(0, statement - payments);
+          const totalDebt = isBCP ? spentBcp : spentRipley;
+          
+          return (
+            <div 
+              style={{
+                backgroundColor: 'var(--ios-card-bg)',
+                border: '1px solid var(--ios-separator)',
+                borderRadius: '16px',
+                padding: '16px',
+                boxShadow: 'var(--shadow-sm)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+                marginTop: '4px',
+                marginBottom: '4px'
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--ios-text)' }}>
+                  Detalle de la Tarjeta
+                </span>
+                <span style={{ fontSize: '11px', color: 'var(--ios-text-secondary)' }}>
+                  Ciclo del 26 al 25
+                </span>
+              </div>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px solid var(--ios-separator)', paddingTop: '10px' }}>
+                {/* Estado de Cuenta */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                  <span style={{ color: 'var(--ios-text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    📄 Estado de Cuenta Facturado
+                  </span>
+                  <span style={{ fontWeight: '600', color: 'var(--ios-text)' }}>
+                    S/. {statement.toFixed(2)}
+                  </span>
+                </div>
+                
+                {/* Pagos Realizados */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                  <span style={{ color: 'var(--ios-text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    ✅ Pagos Realizados (Abonos)
+                  </span>
+                  <span style={{ fontWeight: '600', color: 'var(--color-primary)' }}>
+                    - S/. {payments.toFixed(2)}
+                  </span>
+                </div>
+
+                {/* Pendiente del Estado de Cuenta */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', backgroundColor: '#7676800d', padding: '6px 8px', borderRadius: '8px' }}>
+                  <span style={{ color: 'var(--ios-text-secondary)', fontWeight: '500' }}>
+                    ⏳ Pendiente de Estado de Cuenta
+                  </span>
+                  <span style={{ fontWeight: '700', color: remainingStatement > 0 ? 'var(--color-danger)' : 'var(--color-primary)' }}>
+                    S/. {remainingStatement.toFixed(2)}
+                  </span>
+                </div>
+
+                {/* Consumos del Mes */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginTop: '4px' }}>
+                  <span style={{ color: 'var(--ios-text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    🛒 Nuevos Consumos del Ciclo
+                  </span>
+                  <span style={{ fontWeight: '600', color: 'var(--ios-text)' }}>
+                    S/. {purchases.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+
+              <div style={{ borderTop: '1px solid var(--ios-separator)', paddingTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--ios-text)' }}>
+                  Deuda Total Vigente
+                </span>
+                <span style={{ fontSize: '16px', fontWeight: '800', color: 'var(--ios-text)' }}>
+                  S/. {totalDebt.toFixed(2)}
+                </span>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Botón de Pago Único Dinámico */}
         <div>
           {activeCardIndex === 0 ? (
@@ -614,22 +796,25 @@ export default function CreditCards({ stats, user, onUpdateBudget, token, expens
           <div className="list-container">
             {cardExpenses.length > 0 ? (
               cardExpenses.map((exp) => {
-                const isBCP = exp.category === 'Tarjeta BCP';
+                const isBCP = exp.category === 'Tarjeta BCP' || exp.category === 'Estado Cuenta BCP';
+                const isStatement = exp.category === 'Estado Cuenta BCP' || exp.category === 'Estado Cuenta Ripley';
                 const spenderName = exp.spender_name.split(' ')[0];
                 return (
-                  <div key={exp.id} className="expense-item" style={{ borderBottom: '1px solid var(--ios-separator)' }}>
+                  <div key={exp.id} className="expense-item" style={{ borderBottom: '1px solid var(--ios-separator)', opacity: isStatement ? 0.85 : 1 }}>
                     <div className="expense-left">
                       <div 
                         className="category-emoji-box" 
                         style={{ 
-                          backgroundColor: isBCP ? '#e1f0fa' : '#f2f2f7',
+                          backgroundColor: isStatement ? '#fef3c7' : isBCP ? '#e1f0fa' : '#f2f2f7',
                           fontSize: '18px'
                         }}
                       >
-                        {isBCP ? '💳' : '🛍️'}
+                        {isStatement ? '📄' : isBCP ? '💳' : '🛍️'}
                       </div>
                       <div className="expense-info">
-                        <span className="expense-desc">{exp.description}</span>
+                        <span className="expense-desc" style={{ fontWeight: isStatement ? '600' : 'normal' }}>
+                          {exp.description}
+                        </span>
                         <div className="expense-meta">
                           <span className="spender-tag">{spenderName}</span>
                           <span 
@@ -638,11 +823,11 @@ export default function CreditCards({ stats, user, onUpdateBudget, token, expens
                               borderRadius: '6px', 
                               fontSize: '10px', 
                               fontWeight: '700',
-                              backgroundColor: isBCP ? '#002A54' : '#636366',
+                              backgroundColor: isStatement ? '#d97706' : isBCP ? '#002A54' : '#636366',
                               color: '#ffffff'
                             }}
                           >
-                            {isBCP ? 'BCP' : 'Ripley'}
+                            {isStatement ? 'Facturado' : isBCP ? 'BCP' : 'Ripley'}
                           </span>
                           <span style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
                             <Calendar size={10} /> {formatDate(exp.date)}
@@ -652,7 +837,7 @@ export default function CreditCards({ stats, user, onUpdateBudget, token, expens
                     </div>
 
                     <div className="expense-right">
-                      <span className="expense-amount" style={{ color: isBCP ? '#002A54' : '#48484a' }}>
+                      <span className="expense-amount" style={{ color: isStatement ? '#d97706' : isBCP ? '#002A54' : '#48484a', fontWeight: isStatement ? '700' : 'normal' }}>
                         S/. {parseFloat(exp.amount).toFixed(2)}
                       </span>
                       <button
@@ -687,7 +872,7 @@ export default function CreditCards({ stats, user, onUpdateBudget, token, expens
           
           <div className={`bottom-sheet ${isConfigOpen ? 'open' : ''}`}>
             <div className="sheet-header" onTouchMove={(e) => e.preventDefault()}>
-              <span className="sheet-title">Líneas de Crédito ({yearMonth})</span>
+              <span className="sheet-title">Configuración de Tarjetas ({yearMonth})</span>
               <button className="btn-close" onClick={() => !configLoading && setIsConfigOpen(false)} type="button" disabled={configLoading}>
                 <X size={18} />
               </button>
@@ -708,40 +893,86 @@ export default function CreditCards({ stats, user, onUpdateBudget, token, expens
             )}
 
             <form onSubmit={handleSaveConfig}>
-              {/* Límite BCP */}
-              <div className="form-group" style={{ marginBottom: '14px' }}>
-                <label className="form-label">Límite Tarjeta BCP (S/.)</label>
-                <input 
-                  type="number" 
-                  step="0.01" 
-                  className="form-input" 
-                  style={{ color: '#005ca9', fontWeight: '700' }}
-                  value={valLimitBcp} 
-                  onChange={(e) => setValLimitBcp(e.target.value)} 
-                  disabled={configLoading}
-                  placeholder="1000.00"
-                  required
-                />
+              {/* Sección BCP */}
+              <div style={{ marginBottom: '16px', borderBottom: '1px solid var(--ios-separator)', paddingBottom: '14px' }}>
+                <span style={{ fontSize: '11px', fontWeight: '700', color: '#002A54', textTransform: 'uppercase', display: 'block', marginBottom: '8px' }}>
+                  Tarjeta BCP
+                </span>
+                {/* Límite BCP */}
+                <div className="form-group" style={{ marginBottom: '10px' }}>
+                  <label className="form-label">Límite de Crédito BCP (S/.)</label>
+                  <input 
+                    type="number" 
+                    step="0.01" 
+                    className="form-input" 
+                    style={{ color: '#002A54', fontWeight: '700' }}
+                    value={valLimitBcp} 
+                    onChange={(e) => setValLimitBcp(e.target.value)} 
+                    disabled={configLoading}
+                    placeholder="1000.00"
+                    required
+                  />
+                </div>
+                {/* Estado Cuenta BCP */}
+                <div className="form-group" style={{ marginBottom: '10px' }}>
+                  <label className="form-label">Estado de Cuenta Facturado BCP (S/.)</label>
+                  <input 
+                    type="number" 
+                    step="0.01" 
+                    className="form-input" 
+                    style={{ color: '#002A54', fontWeight: '600' }}
+                    value={valStatementBcp} 
+                    onChange={(e) => setValStatementBcp(e.target.value)} 
+                    disabled={configLoading}
+                    placeholder="0.00"
+                  />
+                  <span style={{ fontSize: '10px', color: 'var(--ios-text-secondary)', marginTop: '4px', display: 'block' }}>
+                    Registra la deuda facturada al inicio de este ciclo para pagar.
+                  </span>
+                </div>
               </div>
 
-              {/* Límite Ripley */}
-              <div className="form-group" style={{ marginBottom: '24px' }}>
-                <label className="form-label">Límite Tarjeta Ripley (S/.)</label>
-                <input 
-                  type="number" 
-                  step="0.01" 
-                  className="form-input" 
-                  style={{ color: '#ec6707', fontWeight: '700' }}
-                  value={valLimitRipley} 
-                  onChange={(e) => setValLimitRipley(e.target.value)} 
-                  disabled={configLoading}
-                  placeholder="500.00"
-                  required
-                />
+              {/* Sección Ripley */}
+              <div style={{ marginBottom: '20px' }}>
+                <span style={{ fontSize: '11px', fontWeight: '700', color: '#636366', textTransform: 'uppercase', display: 'block', marginBottom: '8px' }}>
+                  Tarjeta Ripley
+                </span>
+                {/* Límite Ripley */}
+                <div className="form-group" style={{ marginBottom: '10px' }}>
+                  <label className="form-label">Límite de Crédito Ripley (S/.)</label>
+                  <input 
+                    type="number" 
+                    step="0.01" 
+                    className="form-input" 
+                    style={{ color: '#ec6707', fontWeight: '700' }}
+                    value={valLimitRipley} 
+                    onChange={(e) => setValLimitRipley(e.target.value)} 
+                    disabled={configLoading}
+                    placeholder="500.00"
+                    required
+                  />
+                </div>
+                {/* Estado Cuenta Ripley */}
+                <div className="form-group" style={{ marginBottom: '10px' }}>
+                  <label className="form-label">Estado de Cuenta Facturado Ripley (S/.)</label>
+                  <input 
+                    type="number" 
+                    step="0.01" 
+                    className="form-input" 
+                    style={{ color: '#ec6707', fontWeight: '600' }}
+                    value={valStatementRipley} 
+                    onChange={(e) => setValStatementRipley(e.target.value)} 
+                    disabled={configLoading}
+                    placeholder="0.00"
+                  />
+                  <span style={{ fontSize: '10px', color: 'var(--ios-text-secondary)', marginTop: '4px', display: 'block' }}>
+                    Registra la deuda facturada al inicio de este ciclo para pagar.
+                  </span>
+                </div>
               </div>
 
               <button type="submit" className="btn-primary" disabled={configLoading}>
-                {configLoading ? 'Guardando...' : 'Guardar Líneas de Crédito'}
+                {configLoading ? 'Guardando...' : 'Guardar Configuración'}
               </button>
             </form>
           </div>
